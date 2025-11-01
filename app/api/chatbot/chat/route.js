@@ -128,14 +128,27 @@ Remember: Be conversational and natural! For transfers, ALWAYS ask for bank name
     const aiMessage = completion.choices[0].message.content.trim();
     console.log('AI Message:', aiMessage);
 
-    // Try to parse as JSON action
+    // Try to parse as JSON action - check if the entire message is JSON
     try {
       const parsed = JSON.parse(aiMessage);
       if (parsed.action) {
-        console.log('Action detected:', parsed.action);
+        console.log('Action detected (pure JSON):', parsed.action);
         return NextResponse.json({ action: parsed });
       }
     } catch (e) {
+      // Not pure JSON, check if it contains JSON
+      const jsonMatch = aiMessage.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.action) {
+            console.log('Action detected (extracted JSON):', parsed.action);
+            return NextResponse.json({ action: parsed });
+          }
+        } catch (parseError) {
+          console.log('Failed to parse extracted JSON');
+        }
+      }
       // Not JSON, it's a conversational response
       console.log('Conversational response detected');
     }

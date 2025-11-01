@@ -23,6 +23,8 @@ export default function CardPage() {
   const [videoStream, setVideoStream] = useState(null);
   const [faceVerifying, setFaceVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null); // 'success', 'error', or null
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [cardsLoading, setCardsLoading] = useState(true);
 
   // Malaysian Banks
   const malaysianBanks = [
@@ -70,6 +72,7 @@ export default function CardPage() {
   // Load user's cards from MongoDB
   const loadUserCards = async (userId) => {
     try {
+      setCardsLoading(true);
       const res = await fetch(`/api/cards/list?userId=${userId}`);
       const data = await res.json();
       
@@ -78,6 +81,8 @@ export default function CardPage() {
       }
     } catch (error) {
       console.error("Error loading cards:", error);
+    } finally {
+      setCardsLoading(false);
     }
   };
 
@@ -202,24 +207,28 @@ export default function CardPage() {
     }
   };
 
-  // Initialize face-api models
+  // Initialize face-api models (LAZY LOAD - only when needed)
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  useEffect(() => {
-    const loadModels = async () => {
-      const MODEL_URL = "/models";
-      try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        console.log("Face detection models loaded");
-      } catch (err) {
-        console.error("Error loading face-api models:", err);
-      }
-    };
-    loadModels();
-  }, []);
+  const loadModels = async () => {
+    if (modelsLoaded) return; // Already loaded
+    
+    const MODEL_URL = "/models";
+    try {
+      console.log("Loading face detection models...");
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+      ]);
+      setModelsLoaded(true);
+      console.log("Face detection models loaded successfully");
+    } catch (err) {
+      console.error("Error loading face-api models:", err);
+      throw err;
+    }
+  };
 
   // Handle face verification
   const handleFaceVerification = async () => {
@@ -227,6 +236,12 @@ export default function CardPage() {
     setShowFaceVerification(true);
     
     try {
+      // Load models only when face verification is needed
+      if (!modelsLoaded) {
+        console.log("Loading face models (first time)...");
+        await loadModels();
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { width: 640, height: 480 } 
       });
@@ -491,8 +506,28 @@ export default function CardPage() {
           </div>
         )}
 
+        {/* Loading Skeleton for Cards */}
+        {cardsLoading && (
+          <div className="w-full">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Loading your cards...</h2>
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-white/50 rounded-2xl p-8 animate-pulse">
+                  <div className="h-6 bg-gray-300 rounded w-1/3 mb-6"></div>
+                  <div className="h-8 bg-gray-300 rounded w-3/4 mb-6"></div>
+                  <div className="flex justify-between mb-6">
+                    <div className="h-6 bg-gray-300 rounded w-1/4"></div>
+                    <div className="h-6 bg-gray-300 rounded w-1/5"></div>
+                  </div>
+                  <div className="h-4 bg-gray-300 rounded w-1/6"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Display Cards in Scrollable View */}
-        {cards.length > 0 && (
+        {!cardsLoading && cards.length > 0 && (
           <div className="w-full">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">Your Cards ({cards.length})</h2>
             <ScrollStack className="w-full">
@@ -581,6 +616,31 @@ export default function CardPage() {
             <p className="text-sm text-gray-600 mt-4 text-center">
               Scroll up or down to view all cards ↕
             </p>
+          </div>
+        )}
+
+        {/* No Cards Message */}
+        {!cardsLoading && cards.length === 0 && !showForm && (
+          <div className="text-center py-12">
+            <div className="mb-4">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-24 w-24 mx-auto text-gray-400" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-700 mb-2">No Cards Yet</h3>
+            <p className="text-gray-500 mb-6">Create your first card to get started</p>
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+            >
+              Create Card
+            </button>
           </div>
         )}
 

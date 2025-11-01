@@ -29,6 +29,16 @@ export async function POST(request) {
       return NextResponse.json({ error: "Session expired", valid: false }, { status: 401 });
     }
 
+    // Extend session expiration on every verification (7 days from now)
+    await sessions.updateOne(
+      { sessionId },
+      { 
+        $set: { 
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+        } 
+      }
+    );
+
     // Session is valid
     return NextResponse.json({ 
       valid: true, 

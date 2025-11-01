@@ -19,6 +19,10 @@ export default function BankingChatbot() {
     recipientName: null,
     bank: null
   });
+  const [dashboardRedirect, setDashboardRedirect] = useState({
+    pending: false,
+    type: null // 'history'
+  });
   const [isClient, setIsClient] = useState(false);
   const messagesEndRef = useRef(null);
 
@@ -174,6 +178,32 @@ export default function BankingChatbot() {
 
   const processCommand = async (userInput) => {
     const input = userInput.toLowerCase().trim();
+
+    // Check if we're in dashboard redirect confirmation state
+    if (dashboardRedirect.pending) {
+      if (input.includes('yes') || input.includes('confirm') || input.includes('proceed')) {
+        setDashboardRedirect({ pending: false, type: null });
+        
+        if (dashboardRedirect.type === 'history') {
+          // Redirect to dashboard
+          if (typeof window !== 'undefined') {
+            window.location.href = '/dashboard';
+          }
+          return {
+            content: '🚀 Redirecting you to the dashboard now...',
+            type: 'success',
+            showConfirmButtons: false
+          };
+        }
+      } else if (input.includes('no') || input.includes('cancel')) {
+        setDashboardRedirect({ pending: false, type: null });
+        return {
+          content: '👍 No problem! I\'ll show you a quick summary here instead. Let me fetch your recent transactions...',
+          type: 'text',
+          showConfirmButtons: false
+        };
+      }
+    }
 
     // Check if we're in transfer confirmation state
     console.log('Transfer State:', transferState);
@@ -671,36 +701,17 @@ export default function BankingChatbot() {
       };
     }
 
-    try {
-      const res = await fetch(`/api/cards/transaction-history?userId=${userId}&limit=10`);
-      const data = await res.json();
-      
-      if (data.ok && data.transactions.length > 0) {
-        const historyText = data.transactions.slice(0, 5).map(tx => {
-          const isSender = tx.senderCardNumber === currentCard?.accountNumber;
-          const type = isSender ? 'Sent' : 'Received';
-          const amount = isSender ? `-RM${tx.amount.toFixed(2)}` : `+RM${tx.amount.toFixed(2)}`;
-          return `${type}: ${amount} - ${tx.senderName} → ${tx.recipientName} - ${new Date(tx.timestamp).toLocaleString()}`;
-        }).join('\n');
-        
-        return { 
-          content: `Recent Transactions:\n${historyText}`,
-          type: 'text',
-          transactionsData: data.transactions
-        };
-      }
-      
-      return { 
-        content: 'No transactions found.',
-        type: 'text' 
-      };
-    } catch (error) {
-      console.error('Failed to fetch history:', error);
-      return { 
-        content: 'Unable to fetch transaction history.',
-        type: 'error' 
-      };
-    }
+    // Set dashboard redirect pending state
+    setDashboardRedirect({
+      pending: true,
+      type: 'history'
+    });
+
+    return {
+      content: '📊 Would you like me to take you to the Dashboard?\n\nThere you can view your complete transaction history with advanced filters and visualizations! 🎯\n\nWould you like to go there now?',
+      type: 'dashboard_confirm',
+      showConfirmButtons: true
+    };
   };
 
   const parseTransferCommand = (input) => {
@@ -1028,6 +1039,80 @@ export default function BankingChatbot() {
                         className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
                       >
                         ❌ Cancel
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Dashboard Redirect Confirmation Buttons */}
+                  {message.showConfirmButtons && message.type === 'dashboard_confirm' && (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={async () => {
+                          // Hide all confirmation buttons first
+                          setMessages(prev => prev.map(msg => ({
+                            ...msg,
+                            showConfirmButtons: false
+                          })));
+                          
+                          // Add user message
+                          setMessages(prev => [...prev, {
+                            role: 'user',
+                            content: 'yes',
+                            timestamp: new Date()
+                          }]);
+                          
+                          setLoading(true);
+                          
+                          // Process the confirmation
+                          const response = await processCommand('yes');
+                          
+                          setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: response.content,
+                            type: response.type,
+                            showConfirmButtons: false,
+                            timestamp: new Date()
+                          }]);
+                          
+                          setLoading(false);
+                        }}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        ✅ Yes, Take Me There
+                      </button>
+                      <button
+                        onClick={async () => {
+                          // Hide all confirmation buttons first
+                          setMessages(prev => prev.map(msg => ({
+                            ...msg,
+                            showConfirmButtons: false
+                          })));
+                          
+                          // Add user message
+                          setMessages(prev => [...prev, {
+                            role: 'user',
+                            content: 'no',
+                            timestamp: new Date()
+                          }]);
+                          
+                          setLoading(true);
+                          
+                          // Process the cancellation
+                          const response = await processCommand('no');
+                          
+                          setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: response.content,
+                            type: response.type,
+                            showConfirmButtons: false,
+                            timestamp: new Date()
+                          }]);
+                          
+                          setLoading(false);
+                        }}
+                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        ❌ No, Stay Here
                       </button>
                     </div>
                   )}
