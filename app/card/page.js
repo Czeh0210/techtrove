@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Navigation from "@/components/Navigation";
-import ScrollStack, { ScrollStackItem } from "@/components/ui/scroll-stack";
 import * as faceapi from "face-api.js";
+import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 
 export default function CardPage() {
   const router = useRouter();
@@ -23,6 +23,26 @@ export default function CardPage() {
   const [videoStream, setVideoStream] = useState(null);
   const [faceVerifying, setFaceVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState(null); // 'success', 'error', or null
+  const [verificationMessage, setVerificationMessage] = useState(""); // Error message to display
+  const [currentCardIndex, setCurrentCardIndex] = useState(0); // Current card in carousel
+  const [dragDirection, setDragDirection] = useState(null);
+
+  // Card stack animation values
+  const dragY = useMotionValue(0);
+  const rotateX = useTransform(dragY, [-200, 0, 200], [15, 0, -15]);
+
+  // Configuration
+  const offset = 10;
+  const scaleStep = 0.04;
+  const dimStep = 0.1;
+  const borderRadius = 12;
+  const swipeThreshold = 50;
+
+  const spring = {
+    type: "spring",
+    stiffness: 170,
+    damping: 26
+  };
 
   // Malaysian Banks
   const malaysianBanks = [
@@ -257,8 +277,14 @@ export default function CardPage() {
 
       if (!detection) {
         console.log("No face detected");
-        alert("No face detected. Please try again.");
-        setFaceVerifying(false);
+        setVerificationStatus('error');
+        setVerificationMessage("No face detected. Please try again.");
+        
+        setTimeout(() => {
+          setVerificationStatus(null);
+          setVerificationMessage("");
+          setFaceVerifying(false);
+        }, 3000);
         return;
       }
 
@@ -318,34 +344,36 @@ export default function CardPage() {
           setVerificationStatus(null);
         }, 1500);
       } else {
-        console.error("Face verification failed:", data);
-        console.error("Status:", res.status);
+        console.log("Face verification failed:", data);
+        console.log("Status:", res.status);
         
         // Show error animation (shake)
         setVerificationStatus('error');
+        setVerificationMessage("Face verification failed. Please try again.");
         
         setTimeout(() => {
           setVerificationStatus(null);
+          setVerificationMessage("");
           setFaceVerifying(false);
-        }, 1000);
+        }, 3000);
         
+        // Log detailed error info to console only
         const errorMsg = data.error || data.message || 'Unknown error';
         if (data.similarity !== undefined) {
           console.log("Your similarity score:", data.similarity, "Required:", data.cosTh);
           console.log("Your distance:", data.distance, "Required:", data.distTh);
-          setTimeout(() => {
-            alert(`Face verification failed!\nSimilarity: ${data.similarity.toFixed(3)} (need ≥${data.cosTh})\nDistance: ${data.distance.toFixed(3)} (need ≤${data.distTh})`);
-          }, 1000);
-        } else {
-          setTimeout(() => {
-            alert(`Face verification failed: ${errorMsg}`);
-          }, 1000);
         }
       }
     } catch (err) {
-      console.error("Face verification error:", err);
-      alert("Verification failed: " + err.message);
-      setFaceVerifying(false);
+      console.log("Face verification error:", err);
+      setVerificationStatus('error');
+      setVerificationMessage("Verification failed. Please try again.");
+      
+      setTimeout(() => {
+        setVerificationStatus(null);
+        setVerificationMessage("");
+        setFaceVerifying(false);
+      }, 3000);
     }
   };
 
@@ -365,6 +393,39 @@ export default function CardPage() {
     setSelectedCard(null);
   };
 
+  // Card stack navigation functions
+  const moveToEnd = () => {
+    setCards(prev => [...prev.slice(1), prev[0]]);
+    setCurrentCardIndex((prev) => (prev + 1) % cards.length);
+  };
+
+  const moveToStart = () => {
+    setCards(prev => [prev[prev.length - 1], ...prev.slice(0, -1)]);
+    setCurrentCardIndex((prev) => (prev - 1 + cards.length) % cards.length);
+  };
+
+  const handleDragEnd = (_, info) => {
+    const velocity = info.velocity.y;
+    const offset = info.offset.y;
+
+    if (Math.abs(offset) > swipeThreshold || Math.abs(velocity) > 500) {
+      if (offset < 0 || velocity < 0) {
+        setDragDirection('up');
+        setTimeout(() => {
+          moveToEnd();
+          setDragDirection(null);
+        }, 150);
+      } else {
+        setDragDirection('down');
+        setTimeout(() => {
+          moveToStart();
+          setDragDirection(null);
+        }, 150);
+      }
+    }
+    dragY.set(0);
+  };
+
   return (
     <div className="min-h-screen w-full relative overflow-hidden p-8 pb-32 sm:pt-32 sm:pb-8">
       {/* Animated Aurora Background */}
@@ -377,22 +438,27 @@ export default function CardPage() {
       </div>
 
       <Navigation />
-      <div className="max-w-2xl mx-auto relative z-10">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold text-gray-800">
-            Your Cards
-          </h1>
+      <div className="max-w-6xl mx-auto relative z-10">
+        <div className="flex items-start justify-between mb-12">
+          <div>
+            <h1 className="text-5xl font-bold text-gray-900 mb-2">
+              My Cards
+            </h1>
+            <p className="text-gray-600 text-lg">
+              Manage your bank accounts and cards
+            </p>
+          </div>
           
-          {/* Plus Icon Button */}
+          {/* Create Account Button */}
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-110 group"
+              className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl font-medium"
               title="Create New Card"
             >
               <svg 
                 xmlns="http://www.w3.org/2000/svg" 
-                className="h-8 w-8 transition-transform duration-500 ease-in-out group-hover:rotate-90" 
+                className="h-5 w-5" 
                 fill="none" 
                 viewBox="0 0 24 24" 
                 stroke="currentColor" 
@@ -400,6 +466,7 @@ export default function CardPage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
+              Create Account
             </button>
           )}
         </div>
@@ -491,96 +558,143 @@ export default function CardPage() {
           </div>
         )}
 
-        {/* Display Cards in Scrollable View */}
-        {cards.length > 0 && (
-          <div className="w-full">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Your Cards ({cards.length})</h2>
-            <ScrollStack className="w-full">
-              {cards.map((card, index) => (
-                <ScrollStackItem key={index} className="w-full">
-                  <div className="relative group h-full">
-                    {/* Animated gradient border */}
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 rounded-2xl opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-gradient"></div>
-                    
-                    {/* Card content */}
-                    <div className="relative bg-black rounded-2xl p-8 text-white h-full">
-                      {/* Three Dot Menu Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCardClick(card);
+        {/* Display Cards in Card Stack View */}
+        {cards.length > 0 && !showForm && (
+          <div className="w-full flex flex-col items-center mt-8">
+            
+            {/* Card Stack Container */}
+            <div className="relative w-[500px] h-80 overflow-visible">
+              <ul className="relative w-full h-full m-0 p-0">
+                <AnimatePresence>
+                  {cards.map((card, i) => {
+                    const isFront = i === 0;
+                    const brightness = Math.max(0.7, 1 - i * dimStep);
+                    const baseZ = cards.length - i;
+
+                    return (
+                      <motion.li
+                        key={card._id}
+                        className="absolute w-full h-full list-none overflow-hidden rounded-lg"
+                        style={{
+                          cursor: isFront ? 'grab' : 'auto',
+                          touchAction: 'none',
+                          boxShadow: isFront
+                            ? '0 25px 50px rgba(0, 0, 0, 0.3)'
+                            : '0 15px 30px rgba(0, 0, 0, 0.15)',
+                          rotateX: isFront ? rotateX : 0,
+                          transformPerspective: 1000
                         }}
-                        className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition duration-200 z-10"
-                        title="Options"
+                        animate={{
+                          top: `${i * -offset}%`,
+                          scale: 1 - i * scaleStep,
+                          filter: `brightness(${brightness})`,
+                          zIndex: baseZ,
+                          opacity: dragDirection && isFront ? 0 : 1
+                        }}
+                        exit={{
+                          opacity: 0,
+                          scale: 0.8,
+                          transition: { duration: 0.2 }
+                        }}
+                        transition={spring}
+                        drag={isFront ? 'y' : false}
+                        dragConstraints={{ top: 0, bottom: 0 }}
+                        dragElastic={0.7}
+                        onDrag={(_, info) => {
+                          if (isFront) {
+                            dragY.set(info.offset.y);
+                          }
+                        }}
+                        onDragEnd={handleDragEnd}
+                        whileDrag={
+                          isFront
+                            ? {
+                                zIndex: cards.length + 1,
+                                cursor: 'grabbing',
+                                scale: 1.05,
+                              }
+                            : {}
+                        }
                       >
-                        <svg 
-                          xmlns="http://www.w3.org/2000/svg" 
-                          className="h-6 w-6" 
-                          fill="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <circle cx="12" cy="5" r="2"/>
-                          <circle cx="12" cy="12" r="2"/>
-                          <circle cx="12" cy="19" r="2"/>
-                        </svg>
-                      </button>
+                        <div className="relative group h-full">
+                          {/* Animated gradient border */}
+                          <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 rounded-lg opacity-90"></div>
+                          
+                          {/* Card content */}
+                          <div className="relative bg-black rounded-lg p-8 text-white h-full flex flex-col justify-between shadow-2xl">
+                            {/* Three Dot Menu Button - Only on front card */}
+                            {isFront && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCardClick(card);
+                                }}
+                                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition duration-200 z-10"
+                                title="Options"
+                              >
+                                <svg 
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  className="h-6 w-6" 
+                                  fill="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle cx="12" cy="5" r="2"/>
+                                  <circle cx="12" cy="12" r="2"/>
+                                  <circle cx="12" cy="19" r="2"/>
+                                </svg>
+                              </button>
+                            )}
 
-                      {/* Bank Name at Top */}
-                      {card.bank && (
-                        <div className="mb-4">
-                          <div className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-orange-400">
-                            {card.bank}
+                            {/* Bank Name at Top */}
+                            {card.bank && (
+                              <div className="mb-4">
+                                <div className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-orange-400">
+                                  {card.bank}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="mb-6">
+                              <div className="text-sm opacity-60 mb-2">Card Number</div>
+                              <div className="flex items-end justify-between">
+                                <div className="text-2xl font-mono tracking-wider">
+                                  {formatAccountNumber(card.accountNumber)}
+                                </div>
+                                {/* Visa Logo */}
+                                <svg className="h-10 w-16 mb-0.5" viewBox="0 0 60 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <text x="0" y="24" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="bold" fill="#FFD700" fontStyle="italic">
+                                    VISA
+                                  </text>
+                                </svg>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <div className="text-sm opacity-60 mb-1">Cardholder Name</div>
+                                <div className="text-xl font-semibold uppercase">
+                                  {card.name}
+                                </div>
+                              </div>
+
+                              <div className="text-center">
+                                <div className="text-sm opacity-60 mb-1">CVV</div>
+                                <div className="text-lg font-mono">{card.cvv}</div>
+                              </div>
+
+                              <div className="text-right">
+                                <div className="text-sm opacity-60 mb-1">Valid Thru</div>
+                                <div className="text-lg font-mono">{card.expiryDate}</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
-
-                      <div className="mb-6">
-                        <div className="text-sm opacity-60 mb-2">Card Number</div>
-                        <div className="text-2xl font-mono tracking-wider">
-                          {formatAccountNumber(card.accountNumber)}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-end mb-6">
-                        <div>
-                          <div className="text-sm opacity-60 mb-1">Cardholder Name</div>
-                          <div className="text-xl font-semibold uppercase">
-                            {card.name}
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <div className="text-sm opacity-60 mb-1">Valid Thru</div>
-                          <div className="text-lg font-mono">{card.expiryDate}</div>
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-white/10 flex justify-between">
-                        <div>
-                          <div className="text-sm opacity-60 mb-1">CVV</div>
-                          <div className="text-lg font-mono">{card.cvv}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm opacity-60 mb-1">Created</div>
-                          <div className="text-sm opacity-80">{card.createdDate}</div>
-                        </div>
-                      </div>
-                      
-                      {/* Wave decoration in corner */}
-                      <div className="absolute bottom-6 right-6 opacity-40">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M8 20C8 20 12 12 20 12C28 12 32 20 32 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                          <path d="M8 28C8 28 12 20 20 20C28 20 32 28 32 28" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </ScrollStackItem>
-              ))}
-            </ScrollStack>
-            <p className="text-sm text-gray-600 mt-4 text-center">
-              Scroll up or down to view all cards ↕
-            </p>
+                      </motion.li>
+                    );
+                  })}
+                </AnimatePresence>
+              </ul>
+            </div>
           </div>
         )}
 
@@ -716,6 +830,18 @@ export default function CardPage() {
                   </div>
                 </div>
               </div>
+              
+              {/* Error Message Display */}
+              {verificationMessage && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm font-medium">{verificationMessage}</p>
+                  </div>
+                </div>
+              )}
               
               <div className="mt-6 space-y-4">
                 <button
