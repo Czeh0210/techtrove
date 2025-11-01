@@ -26,10 +26,10 @@ ${transactions.map((t) => `- ${t.type}: RM ${t.amount.toFixed(2)} on ${new Date(
 
 You can ONLY help the user with banking functions:
 - Check their balance
-- Review transactions (this week, month, year)
+- Review transactions (this week, month, year) - Show as text in chat
 - Record transactions/payments (like buying coffee, groceries, bills, online shopping, etc.)
 - Transfer money to other users
-- Download statements
+- Download statements (ONLY when user explicitly asks to "download" or "export")
 
 CRITICAL: You are a BANKING ASSISTANT ONLY. You MUST NOT answer questions outside of banking functions.
 If the user asks about anything else (e.g., general knowledge, weather, recipes, advice, jokes, stories, etc.), politely decline with a warm, friendly response like:
@@ -43,34 +43,66 @@ IMPORTANT: This is a CLOSED online banking system. Users can ONLY:
 
 Users CANNOT deposit new money or withdraw cash - the system only manages existing balances.
 
+VIEWING TRANSACTION HISTORY:
+When user asks to view/check/see their transaction history:
+- Use the get_transactions function to fetch their transactions
+- Display the transactions as formatted text in the chat
+- Show details: date, type, amount, description, balance after
+- Format nicely with bullet points or numbered list
+- ONLY call generate_statement function if user explicitly asks to "download" or "export" the statement
+
+For example, when user asks "show me my transactions":
+1. Call get_transactions with appropriate period
+2. Format and display the results in chat like:
+   "Here are your recent transactions:
+   
+   📅 January 15, 2025
+   • Transfer to demo2: -RM 500.00
+     Note: Lunch money
+     Balance: RM 1,500.00
+   
+   📅 January 14, 2025
+   • Coffee purchase: -RM 15.00
+     At: Starbucks
+     Balance: RM 2,000.00"
+
 IMPORTANT TRANSACTION FLOW:
 For Transactions/Payments (coffee, groceries, bills, online shopping, etc.):
 Step 1: When user mentions buying/paying for something, extract the amount
 Step 2: Ask for transaction details if not provided (e.g., "What did you purchase?")
-Step 3: After getting details, show a summary and ask for confirmation
+Step 3: After getting ALL details, show a clear summary in point form and ask for confirmation:
+   "Please confirm the following transaction:
+   
+   • Amount: RM X
+   • Payment details: [description]
+   
+   Do you want to proceed with this transaction?"
 Step 4: Only after "yes" confirmation, call process_transaction function with type "transaction"
 Step 5: After processing, ALWAYS provide a clear summary like:
    "✅ Transaction completed!
-   Amount: RM X
-   Payment details: [description] (e.g., Coffee at Starbucks)
-   Your new balance: RM Y"
+   • Amount: RM X
+   • Payment details: [description]
+   • Your new balance: RM Y"
 
 For Transfers:
-Step 1: When user wants to transfer money, extract amount and recipient username
-Step 2: Ask for transfer description/note
-Step 3: Show summary with recipient name and ask for confirmation:
-   "Summary:
-   Transfer to: [Recipient Name]
-   Amount: RM X
-   Payment details: [description]
+Step 1: When user wants to transfer money, ask for amount if not provided
+Step 2: Ask for recipient username if not provided
+Step 3: Ask for transfer description/note if not provided
+Step 4: After getting ALL details, show a clear summary in point form and ask for confirmation:
+   "Please confirm the following transfer:
    
-   Are you sure you want to proceed?"
-Step 4: Only after "yes" confirmation, call transfer_money function
-Step 5: After successful transfer, ALWAYS provide a clear summary like:
+   • Transfer to: [Recipient Name]
+   • Amount: RM X
+   • Payment details: [description]
+   
+   Do you want to proceed with this transfer?"
+Step 5: Only after "yes" confirmation, call transfer_money function
+Step 6: After successful transfer, ALWAYS provide a clear summary like:
    "✅ Money transfer successful!
-   Transferred RM X to [Recipient Name]
-   Payment details: [description]
-   Your new balance: RM Y"
+   • Transferred to: [Recipient Name]
+   • Amount: RM X
+   • Payment details: [description]
+   • Your new balance: RM Y"
 
 If user asks to deposit or withdraw money, politely explain: "This is a closed banking system. You can only make payments or transfer money to other users. Deposits and withdrawals are not available."
 
@@ -109,8 +141,31 @@ Be concise, friendly, and accurate.`;
       {
         type: 'function',
         function: {
+          name: 'get_transactions',
+          description: 'Retrieve transaction history to display in chat (NOT for download). Use this when user wants to view/see/check their transactions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              period: {
+                type: 'string',
+                enum: ['week', 'month', 'year', 'all'],
+                description: 'The time period for transactions to retrieve'
+              },
+              type: {
+                type: 'string',
+                enum: ['all', 'transfer-in', 'transfer-out', 'transaction', 'cash-in'],
+                description: 'Filter by transaction type: "all" for all transactions, "transfer-in" for received transfers, "transfer-out" for sent transfers, "transaction" for payments/purchases only'
+              }
+            },
+            required: ['period']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'generate_statement',
-          description: 'Generate and prepare a statement for download for a specific period and optional transaction type filter',
+          description: 'Generate and prepare a statement for DOWNLOAD ONLY. Use this ONLY when user explicitly asks to "download" or "export" their statement.',
           parameters: {
             type: 'object',
             properties: {
@@ -206,7 +261,66 @@ Be concise, friendly, and accurate.`;
 
       console.log('🔧 Function call:', functionName, functionArgs);
 
-      if (functionName === 'process_transaction') {
+      if (functionName === 'get_transactions') {
+        // Retrieve transactions to display in chat
+        const { period, type } = functionArgs;
+        const filterType = type || 'all';
+        console.log('📊 Fetching transactions for display:', period, 'type:', filterType);
+
+        const txList = await getTransactionsForUser(user.id, { period });
+        const filteredTxList = filterType === 'all' ? txList : txList.filter(t => t.type === filterType);
+
+        // Format transactions for display
+        const formattedTransactions = filteredTxList.map(tx => ({
+          date: new Date(tx.timestamp).toLocaleDateString('en-MY', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }),
+          type: tx.type,
+          amount: tx.amount,
+          description: tx.description,
+          balanceAfter: tx.balanceAfter
+        }));
+
+        // Send transactions back to ChatGPT for natural formatting
+        const followUpMessages = [
+          ...messages,
+          choice.message,
+          {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              success: true,
+              count: filteredTxList.length,
+              period: period,
+              transactions: formattedTransactions,
+              message: `Found ${filteredTxList.length} transactions for the ${period}`
+            })
+          }
+        ];
+
+        const followUpRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openaiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: followUpMessages,
+            max_tokens: 800,
+            temperature: 0.7,
+          }),
+        });
+
+        if (followUpRes.ok) {
+          const followUpData = await followUpRes.json();
+          const reply = followUpData.choices?.[0]?.message?.content || 'Here are your transactions.';
+          console.log('✅ ChatGPT reply with transactions');
+          return NextResponse.json({ reply });
+        }
+      } else if (functionName === 'process_transaction') {
         // Execute the transaction
         const { amount, type, description } = functionArgs;
         const balanceBefore = await calculateBalance(user.id);
