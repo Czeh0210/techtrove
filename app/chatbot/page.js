@@ -16,7 +16,8 @@ export default function BankingChatbot() {
     step: null, // 'amount', 'card', 'confirm'
     amount: null,
     recipientCard: null,
-    recipientName: null
+    recipientName: null,
+    bank: null
   });
   const [isClient, setIsClient] = useState(false);
   const messagesEndRef = useRef(null);
@@ -174,6 +175,28 @@ export default function BankingChatbot() {
   const processCommand = async (userInput) => {
     const input = userInput.toLowerCase().trim();
 
+    // Check if we're in transfer confirmation state
+    console.log('Transfer State:', transferState);
+    console.log('User Input:', userInput);
+    
+    if (transferState.active && transferState.step === 'confirm') {
+      console.log('In transfer confirmation state!');
+      if (input.includes('confirm') || input.includes('yes') || input.includes('proceed')) {
+        console.log('Executing transfer...', transferState);
+        const result = await executeTransfer(transferState.amount, transferState.recipientCard, transferState.recipientName);
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
+        return result;
+      } else if (input.includes('cancel') || input.includes('no') || input.includes('abort')) {
+        console.log('Cancelling transfer...');
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
+        return {
+          content: '✋ No worries! I\'ve cancelled the transfer for you.\n\nYour money is safe. Let me know if you need anything else! 😊',
+          type: 'text',
+          showConfirmButtons: false
+        };
+      }
+    }
+
     // Use OpenAI to understand intent and generate responses naturally
     try {
       // Get recent conversation history for context (last 10 messages)
@@ -213,38 +236,76 @@ export default function BankingChatbot() {
               return await handleTransactionHistory();
               
             case 'transfer':
-              // Only execute if we have COMPLETE information (amount + card number)
-              if (data.action.amount && data.action.cardNumber) {
-                const cleanCard = data.action.cardNumber.replace(/[-\s]/g, '');
+              // Only execute if we have COMPLETE information (bank, accountNumber, and amount)
+              if (data.action.bank && data.action.accountNumber && data.action.amount) {
+                const cleanAccountNumber = data.action.accountNumber.replace(/[-\s]/g, '');
+                const bankName = data.action.bank;
                 
                 try {
-                  const verifyRes = await fetch(`/api/cards/verify?cardNumber=${cleanCard}`);
+                  // Fetch user's cards to get current balance
+                  let activeCard = currentCard;
+                  if (!activeCard || activeCard.balance === undefined) {
+                    const cardsRes = await fetch('/api/cards/list?userId=' + userId);
+                    const cardsData = await cardsRes.json();
+                    
+                    if (!cardsData.ok || cardsData.cards.length === 0) {
+                      return {
+                        content: '😔 Unable to find your cards. Please try again!',
+                        type: 'error'
+                      };
+                    }
+                    
+                    activeCard = cardsData.cards[0];
+                  }
+                  
+                  const verifyRes = await fetch(`/api/cards/verify?cardNumber=${cleanAccountNumber}`);
                   const verifyData = await verifyRes.json();
                   
                   if (!verifyData.exists) {
                     return {
-                      content: `I couldn't find a card with number ${cleanCard}. Please check the card number and try again! 😊`,
+                      content: `I couldn't find an account with number ${cleanAccountNumber}. Please check the account number and try again! 😊`,
                       type: 'error'
                     };
                   }
                   
-                  if (cleanCard === currentCard.accountNumber) {
+                  // Validate bank name matches the card's actual bank
+                  const recipientCardBank = verifyData.card.bank;
+                  if (recipientCardBank && bankName.toLowerCase() !== recipientCardBank.toLowerCase()) {
                     return {
-                      content: 'You can\'t transfer money to yourself! Please provide a different card number. 😊',
+                      content: `❌ Invalid Bank or Account Number!\n\nThe bank name and account number combination you provided is incorrect. Please verify the details and try again! 😊`,
                       type: 'error'
                     };
                   }
                   
-                  if (data.action.amount > currentCard.balance) {
+                  if (cleanAccountNumber === activeCard.accountNumber) {
                     return {
-                      content: `You don't have enough balance for this transfer. Your current balance is RM${currentCard.balance.toFixed(2)}, but you're trying to send RM${data.action.amount.toFixed(2)}. �`,
+                      content: 'You can\'t transfer money to yourself! Please provide a different account number. 😊',
                       type: 'error'
                     };
                   }
                   
-                  // Execute transfer directly
-                  const result = await executeTransfer(data.action.amount, cleanCard, verifyData.card.name);
-                  return result;
+                  if (data.action.amount > activeCard.balance) {
+                    return {
+                      content: `You don't have enough balance for this transfer. Your current balance is RM${activeCard.balance.toFixed(2)}, but you're trying to send RM${data.action.amount.toFixed(2)}. 💳`,
+                      type: 'error'
+                    };
+                  }
+                  
+                  // Show confirmation summary before executing transfer
+                  setTransferState({
+                    active: true,
+                    step: 'confirm',
+                    amount: data.action.amount,
+                    recipientCard: cleanAccountNumber,
+                    recipientName: verifyData.card.name,
+                    bank: bankName
+                  });
+                  
+                  return {
+                    content: `✨ Perfect! I found the recipient!\n\n━━━━━━━━━━━━━━━━━━━━━\n📋 TRANSFER CONFIRMATION\n━━━━━━━━━━━━━━━━━━━━━\n\n🏦 Bank: ${bankName}\n👤 Recipient: ${verifyData.card.name}\n💳 Account: ${cleanAccountNumber}\n💵 Amount: RM${data.action.amount.toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\n� YOUR BALANCE\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Current Balance: RM${activeCard.balance.toFixed(2)}\n💰 After Transfer: RM${(activeCard.balance - data.action.amount).toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\n\nPlease review and confirm this transfer! 😊`,
+                    type: 'confirm',
+                    showConfirmButtons: true
+                  };
                   
                 } catch (error) {
                   console.error('Transfer execution failed:', error);
@@ -270,7 +331,100 @@ export default function BankingChatbot() {
           }
         }
         
-        // No specific action detected - return AI's conversational response
+        // No specific action detected - check if response contains JSON
+        if (data.response) {
+          // Try to extract JSON from the response
+          const jsonMatch = data.response.match(/\{[\s\S]*"action"[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const parsedAction = JSON.parse(jsonMatch[0]);
+              if (parsedAction.action === 'transfer' && parsedAction.bank && parsedAction.accountNumber && parsedAction.amount) {
+                // Handle the transfer action with new format (bank, accountNumber, amount)
+                const cleanAccountNumber = parsedAction.accountNumber.replace(/[-\s]/g, '');
+                const bankName = parsedAction.bank;
+                
+                try {
+                  // Get current user's active card if not already available
+                  let activeCard = currentCard;
+                  if (!activeCard || activeCard.balance === undefined) {
+                    const cardsRes = await fetch('/api/cards/list?userId=' + userId);
+                    const cardsData = await cardsRes.json();
+                    
+                    if (!cardsData.ok || cardsData.cards.length === 0) {
+                      return {
+                        content: '😔 Unable to find your cards. Please try again!',
+                        type: 'error'
+                      };
+                    }
+                    
+                    // Use the first card as active card
+                    activeCard = cardsData.cards[0];
+                  }
+                  
+                  const verifyRes = await fetch(`/api/cards/verify?cardNumber=${cleanAccountNumber}`);
+                  const verifyData = await verifyRes.json();
+                  
+                  if (!verifyData.exists) {
+                    return {
+                      content: `I couldn't find an account with number ${cleanAccountNumber}. Please check the account number and try again! 😊`,
+                      type: 'error'
+                    };
+                  }
+                  
+                  // Validate bank name matches the card's actual bank
+                  const recipientCardBank = verifyData.card.bank;
+                  if (recipientCardBank && bankName.toLowerCase() !== recipientCardBank.toLowerCase()) {
+                    return {
+                      content: `❌ Invalid Bank or Account Number!\n\nThe bank name and account number combination you provided is incorrect. Please verify the details and try again! 😊`,
+                      type: 'error'
+                    };
+                  }
+                  
+                  if (cleanAccountNumber === activeCard.accountNumber) {
+                    return {
+                      content: 'You can\'t transfer money to yourself! Please provide a different account number. 😊',
+                      type: 'error'
+                    };
+                  }
+                  
+                  if (parsedAction.amount > activeCard.balance) {
+                    return {
+                      content: `You don't have enough balance for this transfer. Your current balance is RM${activeCard.balance.toFixed(2)}, but you're trying to send RM${parsedAction.amount.toFixed(2)}. 💳`,
+                      type: 'error'
+                    };
+                  }
+                  
+                  // Show confirmation summary before executing transfer
+                  setTransferState({
+                    active: true,
+                    step: 'confirm',
+                    amount: parsedAction.amount,
+                    recipientCard: cleanAccountNumber,
+                    recipientName: verifyData.card.name,
+                    bank: bankName
+                  });
+                  
+                  return {
+                    content: `✨ Perfect! I found the recipient!\n\n━━━━━━━━━━━━━━━━━━━━━\n📋 TRANSFER CONFIRMATION\n━━━━━━━━━━━━━━━━━━━━━\n\n🏦 Bank: ${bankName}\n� Recipient: ${verifyData.card.name}\n💳 Account: ${cleanAccountNumber}\n�💵 Amount: RM${parsedAction.amount.toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\n� YOUR BALANCE\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Current Balance: RM${activeCard.balance.toFixed(2)}\n💰 After Transfer: RM${(activeCard.balance - parsedAction.amount).toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\n\nPlease review and confirm this transfer! 😊`,
+                    type: 'confirm',
+                    showConfirmButtons: true
+                  };
+                } catch (error) {
+                  console.error('Transfer verification failed:', error);
+                  return {
+                    content: 'I encountered an error while verifying the account. Please try again! 😅',
+                    type: 'error'
+                  };
+                }
+              }
+            } catch (e) {
+              // Not valid JSON, continue with normal response
+              console.log('Failed to parse JSON from response:', e);
+            }
+          }
+        }
+        
+        // Return AI's conversational response
         return {
           content: data.response || "I'm here to help! Try asking me to check your balance, view cards, or transfer money.",
           type: 'text'
@@ -326,7 +480,7 @@ export default function BankingChatbot() {
       }
 
       if (currentCard.balance < transferAmount) {
-        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
         return {
           content: `❌ Insufficient Balance\n\nYour balance: RM${currentCard.balance.toFixed(2)}\nRequested amount: RM${transferAmount.toFixed(2)}\nShortfall: RM${(transferAmount - currentCard.balance).toFixed(2)}\n\nTransfer cancelled.`,
           type: 'error'
@@ -360,7 +514,7 @@ export default function BankingChatbot() {
 
       // Check if trying to transfer to self
       if (cardNumber === currentCard.accountNumber) {
-        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
         return {
           content: '😊 I notice that\'s your own card number!\n\nYou can\'t transfer money to yourself. Please enter a different card number, or type "cancel" to stop.\n\nTransfer cancelled.',
           type: 'error'
@@ -373,7 +527,7 @@ export default function BankingChatbot() {
         const verifyData = await verifyRes.json();
         
         if (!verifyData.exists) {
-          setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+          setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
           return {
             content: `🔍 I couldn't find a card with that number.\n\nThe card number ${cardNumber} is not registered in our system yet.\n\n💡 Tip: You can only transfer to cards that exist in our database. Please double-check the number and try again!\n\nTransfer cancelled for your security.`,
             type: 'error'
@@ -396,7 +550,7 @@ export default function BankingChatbot() {
 
       } catch (error) {
         console.error('Card verification failed:', error);
-        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
         return {
           content: '😅 Oops! I\'m having trouble verifying that card right now.\n\nPlease try again in a moment. Your transfer has been cancelled for safety.',
           type: 'error'
@@ -410,13 +564,14 @@ export default function BankingChatbot() {
       
       if (input.includes('confirm') || input.includes('yes') || input.includes('proceed')) {
         const result = await executeTransfer(amount, recipientCard, transferState.recipientName);
-        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
         return result;
       } else if (input.includes('cancel') || input.includes('no') || input.includes('abort')) {
-        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null });
+        setTransferState({ active: false, step: null, amount: null, recipientCard: null, recipientName: null, bank: null });
         return {
           content: '✋ No worries! I\'ve cancelled the transfer for you.\n\nYour money is safe. Let me know if you need anything else! 😊',
-          type: 'text'
+          type: 'text',
+          showConfirmButtons: false
         };
       } else {
         return {
@@ -580,47 +735,80 @@ export default function BankingChatbot() {
   };
 
   const executeTransfer = async (amount, recipientCardNumber, recipientName) => {
+    console.log('executeTransfer called with:', { amount, recipientCardNumber, recipientName, currentCard, userId });
+    
     if (!currentCard) {
       return { 
         content: '😊 To make transfers, you\'ll need to have a card first.\n\nPlease create one from the Card Creation page!', 
-        type: 'error' 
+        type: 'error',
+        showConfirmButtons: false
       };
     }
 
-    try {
-      const res = await fetch('/api/cards/transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          senderUserId: userId,
-          senderCardNumber: currentCard.accountNumber,
-          recipientCardNumber: recipientCardNumber,
-          recipientName: recipientName,
-          amount: amount
-        })
-      });
+    if (!userId) {
+      return { 
+        content: '😊 Please log in first to make transfers!', 
+        type: 'error',
+        showConfirmButtons: false
+      };
+    }
 
-      const data = await res.json();
-      
-      if (data.ok) {
-        // Refresh cards to get updated balance
-        await loadUserCards(userId);
+    // Refresh current card data to ensure we have the latest info
+    try {
+      const cardsRes = await fetch(`/api/cards/list?userId=${userId}`);
+      const cardsData = await cardsRes.json();
+      if (cardsData.ok && cardsData.cards.length > 0) {
+        const freshCard = cardsData.cards.find(c => c.accountNumber === currentCard.accountNumber) || cardsData.cards[0];
+        setCurrentCard(freshCard);
         
-        return {
-          content: `🎉 Transfer Successful!\n\n━━━━━━━━━━━━━━━━━━━━━\n💸 Amount: RM${amount.toFixed(2)}\n👤 To: ${recipientName}\n🏦 Card: ${recipientCardNumber}\n📅 ${new Date(data.transaction.timestamp).toLocaleString()}\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Previous Balance: RM${data.previousBalance.toFixed(2)}\n💰 New Balance: RM${data.newBalance.toFixed(2)}\n\n🆔 Transaction ID: ${data.transaction.id}\n\nThank you for using our service! Is there anything else I can help you with? 😊`,
-          type: 'success'
-        };
+        console.log('Fresh card data:', freshCard);
+        
+        // Use fresh card for transfer
+        console.log('Sending transfer request to API...');
+        const res = await fetch('/api/cards/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            senderUserId: userId,
+            senderCardNumber: freshCard.accountNumber,
+            recipientCardNumber: recipientCardNumber,
+            recipientName: recipientName,
+            amount: amount
+          })
+        });
+
+        const data = await res.json();
+        console.log('Transfer API response:', data);
+        
+        if (data.ok) {
+          // Refresh cards to get updated balance
+          await loadUserCards(userId);
+          
+          return {
+            content: `🎉 Transfer Successful!\n\n━━━━━━━━━━━━━━━━━━━━━\n💸 Amount: RM${amount.toFixed(2)}\n👤 To: ${recipientName}\n🏦 Card: ${recipientCardNumber}\n📅 ${new Date(data.transaction.timestamp).toLocaleString()}\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Previous Balance: RM${data.previousBalance.toFixed(2)}\n💰 New Balance: RM${data.newBalance.toFixed(2)}\n\n🆔 Transaction ID: ${data.transaction.id}\n\nThank you for using our service! Is there anything else I can help you with? 😊`,
+            type: 'success',
+            showConfirmButtons: false
+          };
+        } else {
+          return {
+            content: `😔 I'm sorry, but the transfer couldn't be completed.\n\n❌ Reason: ${data.error}\n${data.hint || ''}\n\nPlease try again or let me know if you need help!`,
+            type: 'error',
+            showConfirmButtons: false
+          };
+        }
       } else {
         return {
-          content: `😔 I'm sorry, but the transfer couldn't be completed.\n\n❌ Reason: ${data.error}\n${data.hint || ''}\n\nPlease try again or let me know if you need help!`,
-          type: 'error'
+          content: '😔 Unable to load your card information. Please try again!',
+          type: 'error',
+          showConfirmButtons: false
         };
       }
     } catch (error) {
       console.error('Transfer error:', error);
       return {
         content: '😅 Oops! Something went wrong during the transfer.\n\nPlease check your connection and try again. Your money is safe!',
-        type: 'error'
+        type: 'error',
+        showConfirmButtons: false
       };
     }
   };
@@ -775,6 +963,12 @@ export default function BankingChatbot() {
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={async () => {
+                          // Hide all confirmation buttons first
+                          setMessages(prev => prev.map(msg => ({
+                            ...msg,
+                            showConfirmButtons: false
+                          })));
+                          
                           // Add user message
                           setMessages(prev => [...prev, {
                             role: 'user',
@@ -791,7 +985,7 @@ export default function BankingChatbot() {
                             role: 'assistant',
                             content: response.content,
                             type: response.type,
-                            showConfirmButtons: response.showConfirmButtons || false,
+                            showConfirmButtons: false,
                             timestamp: new Date()
                           }]);
                           
@@ -803,6 +997,12 @@ export default function BankingChatbot() {
                       </button>
                       <button
                         onClick={async () => {
+                          // Hide all confirmation buttons first
+                          setMessages(prev => prev.map(msg => ({
+                            ...msg,
+                            showConfirmButtons: false
+                          })));
+                          
                           // Add user message
                           setMessages(prev => [...prev, {
                             role: 'user',
@@ -819,7 +1019,7 @@ export default function BankingChatbot() {
                             role: 'assistant',
                             content: response.content,
                             type: response.type,
-                            showConfirmButtons: response.showConfirmButtons || false,
+                            showConfirmButtons: false,
                             timestamp: new Date()
                           }]);
                           

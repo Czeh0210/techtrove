@@ -49,17 +49,16 @@ export async function POST(request) {
       );
     }
 
-    // Find recipient by card number and name - MUST exist in database
+    // Find recipient by card number - MUST exist in database
     const recipientCard = await cards.findOne({
-      accountNumber: recipientCardNumber,
-      normalizedName: recipientName.toLowerCase().trim()
+      accountNumber: recipientCardNumber
     });
 
     if (!recipientCard) {
       return NextResponse.json(
         { 
-          error: "Recipient card not found in our system. The card number and name must match exactly with a registered card in our database.",
-          hint: "Please verify both the 16-digit card number and the cardholder name are correct."
+          error: "Recipient card not found in our system. Please verify the card number is correct.",
+          hint: "Please ensure the 16-digit card number is registered in our database."
         },
         { status: 404 }
       );
@@ -117,7 +116,7 @@ export async function POST(request) {
 
     // Update recipient's balance
     await cards.updateOne(
-      { accountNumber: recipientCardNumber, normalizedName: recipientName.toLowerCase().trim() },
+      { accountNumber: recipientCardNumber },
       { 
         $set: { 
           balance: newRecipientBalance,

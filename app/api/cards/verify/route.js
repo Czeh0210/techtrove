@@ -45,6 +45,7 @@ export async function GET(request) {
       card: {
         name: card.name,
         accountNumber: card.accountNumber,
+        bank: card.bank,
         // Don't expose: userId, cvv, balance, etc.
       },
       message: "Card found in database"
