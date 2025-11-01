@@ -1,4 +1,5 @@
 import { MoveRight, PhoneCall } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,10 @@ function Hero() {
         <div className="grid grid-cols-1 gap-8 items-center lg:grid-cols-2">
           <div className="flex gap-4 flex-col">
             <div>
-              <Badge variant="outline">We’re redefining finance!</Badge>
+              <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5">
+                <Image src="/Centryx.svg" alt="CenTryx" width={18} height={18} />
+                <span className="text-sm font-medium">CenTryx</span>
+              </Badge>
             </div>
             <div className="flex gap-4 flex-col">
               <h1 className="text-5xl md:text-7xl max-w-lg tracking-tighter text-left font-regular">
