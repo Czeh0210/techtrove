@@ -168,7 +168,31 @@ export default function DashboardPage() {
   };
 
   const renderPieChart = () => {
-    const total = cashFlow.cashIn + cashFlow.cashOut;
+    // Calculate cash flow for the selected card/all cards
+    let cashIn = 0;
+    let cashOut = 0;
+    
+    transactions.forEach(tx => {
+      if (selectedCard !== 'all') {
+        // Specific card selected
+        if (tx.senderCardNumber === selectedCard) {
+          cashOut += tx.amount;
+        }
+        if (tx.recipientCardNumber === selectedCard) {
+          cashIn += tx.amount;
+        }
+      } else {
+        // All cards - use userId
+        if (tx.senderUserId === userId) {
+          cashOut += tx.amount;
+        }
+        if (tx.recipientUserId === userId) {
+          cashIn += tx.amount;
+        }
+      }
+    });
+    
+    const total = cashIn + cashOut;
     
     // Calculate balance based on selected card or all cards
     let totalBalance = 0;
@@ -200,7 +224,7 @@ export default function DashboardPage() {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <p className="text-xs text-zinc-400 mb-1">Balance</p>
-              <p className="text-2xl font-bold text-white">RM{totalBalance.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">RM{totalBalance.toFixed(2)}</p>
               <p className="text-xs text-yellow-400 mt-1">No Flow</p>
               <p className="text-xs text-zinc-500 mt-1">{cardLabel}</p>
             </div>
@@ -209,13 +233,16 @@ export default function DashboardPage() {
       );
     }
 
-    const cashInPercent = (cashFlow.cashIn / total) * 100;
-    const cashOutPercent = (cashFlow.cashOut / total) * 100;
+    const cashInPercent = (cashIn / total) * 100;
+    const cashOutPercent = (cashOut / total) * 100;
     
     // Calculate circle segments
     const circumference = 2 * Math.PI * 80;
     const cashInLength = (cashInPercent / 100) * circumference;
     const cashOutLength = (cashOutPercent / 100) * circumference;
+    
+    // Calculate net flow
+    const netFlow = cashIn - cashOut;
 
     return (
       <div className="relative w-48 h-48 mx-auto">
@@ -226,7 +253,7 @@ export default function DashboardPage() {
             cy="96"
             r="80"
             fill="none"
-            stroke="#1f2937"
+            stroke="#e5e7eb"
             strokeWidth="32"
           />
           {/* Cash In (Green) - starts at top */}
@@ -235,7 +262,7 @@ export default function DashboardPage() {
             cy="96"
             r="80"
             fill="none"
-            stroke="#22c55e"
+            stroke="#10b981"
             strokeWidth="32"
             strokeDasharray={`${cashInLength} ${circumference}`}
             strokeDashoffset="0"
@@ -254,13 +281,13 @@ export default function DashboardPage() {
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-xs text-zinc-300 mb-1">Balance</p>
-            <p className="text-2xl font-bold text-white">RM{totalBalance.toFixed(2)}</p>
-            <p className="text-xs text-zinc-400 mt-1">{cardLabel}</p>
-            <div className="flex gap-2 mt-2 text-xs">
-              <span className="text-green-400">{cashInPercent.toFixed(0)}%</span>
-              <span className="text-zinc-500">|</span>
-              <span className="text-red-400">{cashOutPercent.toFixed(0)}%</span>
+            <p className="text-xs text-gray-500 mb-1">Balance</p>
+            <p className="text-2xl font-bold text-gray-900">RM{totalBalance.toFixed(2)}</p>
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-xs text-gray-500">Net Flow</p>
+              <p className={`text-sm font-semibold ${netFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {netFlow >= 0 ? '+' : ''}RM{netFlow.toFixed(2)}
+              </p>
             </div>
           </div>
         </div>
@@ -449,7 +476,7 @@ export default function DashboardPage() {
 </head>
 <body>
   <div class="header">
-    <h1>🏦 TechTrove Banking</h1>
+    <h1>💳 Centryx</h1>
     <p>Transaction Statement</p>
   </div>
 
@@ -528,7 +555,7 @@ export default function DashboardPage() {
 
   <div class="footer">
     <p>This is a computer-generated statement and does not require a signature.</p>
-    <p>TechTrove Banking © ${new Date().getFullYear()} • Confidential Document</p>
+    <p>Centryx © ${new Date().getFullYear()} • Confidential Document</p>
   </div>
 </body>
 </html>
@@ -562,195 +589,335 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen w-full relative overflow-hidden">
+      {/* Light Aurora Background - Same as Card Page */}
+      <div className="fixed inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50"></div>
+        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-aurora-1"></div>
+        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-aurora-2"></div>
+        <div className="absolute bottom-0 left-1/3 w-[550px] h-[550px] bg-gradient-to-br from-indigo-400/30 to-purple-400/30 rounded-full blur-3xl animate-aurora-3"></div>
+        <div className="absolute top-1/2 right-1/4 w-[450px] h-[450px] bg-gradient-to-br from-pink-400/30 to-rose-400/30 rounded-full blur-3xl animate-aurora-4"></div>
+      </div>
+
       <Navigation />
       
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Cash Flow Dashboard</h1>
-          <p className="text-white/70">Track your income and expenses</p>
+      <div className="container mx-auto px-4 pt-24 pb-8 max-w-7xl relative z-10">
+        {/* Header with Aurora Glow */}
+        <div className="mb-8 text-center">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 drop-shadow-lg">
+            Cash Flow Dashboard
+          </h1>
+          <p className="text-gray-700 text-lg">Track your financial journey with real-time insights</p>
         </div>
 
-        {/* Time Filter */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-4 mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="w-5 h-5 text-white" />
-            <h2 className="text-lg font-semibold text-white">Time Period</h2>
+        {/* Time Filter with Light Aurora Design */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-indigo-200 p-6 mb-6 shadow-xl hover:shadow-purple-300/50 transition-all duration-300">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg">
+              <Calendar className="w-6 h-6 text-indigo-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-800">Time Period</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { value: 'day', label: 'Today' },
-              { value: 'week', label: 'Last 7 Days' },
-              { value: 'month', label: 'Last 30 Days' },
-              { value: '6months', label: 'Last 6 Months' }
+              { value: 'day', label: 'Today', icon: '☀️' },
+              { value: 'week', label: 'Last 7 Days', icon: '📅' },
+              { value: 'month', label: 'Last 30 Days', icon: '📊' },
+              { value: '6months', label: 'Last 6 Months', icon: '📈' }
             ].map(filter => (
               <button
                 key={filter.value}
                 onClick={() => setTimeFilter(filter.value)}
-                className={`px-4 py-2.5 rounded-lg font-medium transition-all ${
+                className={`group px-5 py-3 rounded-xl font-medium transition-all duration-300 relative overflow-hidden ${
                   timeFilter === filter.value
-                    ? 'bg-purple-600 text-white shadow-lg scale-105'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-gray-900 shadow-lg shadow-indigo-300/50 scale-105'
+                    : 'bg-white/60 text-gray-700 hover:bg-white/90 border border-indigo-200/50'
                 }`}
               >
-                {filter.label}
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  <span>{filter.icon}</span>
+                  <span>{filter.label}</span>
+                </span>
+                {timeFilter === filter.value && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-400/20 to-purple-400/20 blur-xl"></div>
+                )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Cash Flow Summary */}
+        {/* Cash Flow Summary with Aurora Gradients */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Cash In */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-white/20 p-3 rounded-lg">
-                <ArrowDownLeft className="w-6 h-6 text-white" />
+          <div className="group relative bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-xl border border-emerald-300/50 hover:border-emerald-400 transition-all duration-300 hover:scale-105 hover:shadow-emerald-300/50">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-100/50 to-cyan-100/50 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-gradient-to-br from-emerald-100 to-cyan-100 rounded-xl">
+                  <ArrowDownLeft className="w-7 h-7 text-emerald-600" />
+                </div>
+                <TrendingUp className="w-10 h-10 text-emerald-400/40" />
               </div>
-              <TrendingUp className="w-8 h-8 text-white/40" />
+              <h3 className="text-emerald-700 text-sm font-medium mb-2">Cash In</h3>
+              <p className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent">
+                RM{cashFlow.cashIn.toFixed(2)}
+              </p>
+              <p className="text-emerald-600/70 text-xs mt-3 flex items-center gap-1">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                {getTimeFilterLabel()}
+              </p>
             </div>
-            <h3 className="text-white/90 text-sm font-medium mb-1">Cash In</h3>
-            <p className="text-3xl font-bold text-white">RM{cashFlow.cashIn.toFixed(2)}</p>
-            <p className="text-white/70 text-xs mt-2">{getTimeFilterLabel()}</p>
           </div>
 
           {/* Cash Out */}
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-white/20 p-3 rounded-lg">
-                <ArrowUpRight className="w-6 h-6 text-white" />
+          <div className="group relative bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-xl border border-rose-300/50 hover:border-rose-400 transition-all duration-300 hover:scale-105 hover:shadow-rose-300/50">
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-100/50 to-pink-100/50 rounded-2xl blur-xl group-hover:blur-2xl transition-all"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-gradient-to-br from-rose-100 to-pink-100 rounded-xl">
+                  <ArrowUpRight className="w-7 h-7 text-rose-600" />
+                </div>
+                <TrendingDown className="w-10 h-10 text-rose-400/40" />
               </div>
-              <TrendingDown className="w-8 h-8 text-white/40" />
+              <h3 className="text-rose-700 text-sm font-medium mb-2">Cash Out</h3>
+              <p className="text-4xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
+                RM{cashFlow.cashOut.toFixed(2)}
+              </p>
+              <p className="text-rose-600/70 text-xs mt-3 flex items-center gap-1">
+                <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+                {getTimeFilterLabel()}
+              </p>
             </div>
-            <h3 className="text-white/90 text-sm font-medium mb-1">Cash Out</h3>
-            <p className="text-3xl font-bold text-white">RM{cashFlow.cashOut.toFixed(2)}</p>
-            <p className="text-white/70 text-xs mt-2">{getTimeFilterLabel()}</p>
           </div>
 
           {/* Net Flow */}
-          <div className={`bg-gradient-to-br ${
-            cashFlow.total > 0 ? 'from-blue-500 to-blue-600' : 
-            cashFlow.total < 0 ? 'from-orange-500 to-orange-600' : 
-            'from-yellow-500 to-yellow-600'
-          } rounded-xl p-6 shadow-xl`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-white/20 p-3 rounded-lg">
-                <DollarSign className="w-6 h-6 text-white" />
+          <div className={`group relative bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-xl transition-all duration-300 hover:scale-105 ${
+            cashFlow.total > 0 
+              ? 'border border-indigo-300/50 hover:border-indigo-400 hover:shadow-indigo-300/50' 
+              : cashFlow.total < 0 
+              ? 'border border-orange-300/50 hover:border-orange-400 hover:shadow-orange-300/50'
+              : 'border border-violet-300/50 hover:border-violet-400 hover:shadow-violet-300/50'
+          }`}>
+            <div className={`absolute inset-0 rounded-2xl blur-xl group-hover:blur-2xl transition-all ${
+              cashFlow.total > 0 ? 'bg-gradient-to-br from-indigo-100/50 to-purple-100/50' :
+              cashFlow.total < 0 ? 'bg-gradient-to-br from-orange-100/50 to-amber-100/50' :
+              'bg-gradient-to-br from-violet-100/50 to-purple-100/50'
+            }`}></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-xl ${
+                  cashFlow.total > 0 ? 'bg-gradient-to-br from-indigo-100 to-purple-100' :
+                  cashFlow.total < 0 ? 'bg-gradient-to-br from-orange-100 to-amber-100' :
+                  'bg-gradient-to-br from-violet-100 to-purple-100'
+                }`}>
+                  <DollarSign className={`w-7 h-7 ${
+                    cashFlow.total > 0 ? 'text-indigo-600' :
+                    cashFlow.total < 0 ? 'text-orange-600' :
+                    'text-violet-600'
+                  }`} />
+                </div>
               </div>
+              <h3 className={`text-sm font-medium mb-2 ${
+                cashFlow.total > 0 ? 'text-blue-200/90' :
+                cashFlow.total < 0 ? 'text-orange-200/90' :
+                'text-violet-200/90'
+              }`}>Net Flow</h3>
+              <p className={`text-4xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${
+                cashFlow.total > 0 ? 'from-indigo-600 to-purple-600' :
+                cashFlow.total < 0 ? 'from-orange-600 to-amber-600' :
+                'from-violet-600 to-purple-600'
+              }`}>
+                {cashFlow.total >= 0 ? '+' : ''}RM{cashFlow.total.toFixed(2)}
+              </p>
+              <p className={`text-xs mt-3 flex items-center gap-1 ${
+                cashFlow.total > 0 ? 'text-indigo-600/60' :
+                cashFlow.total < 0 ? 'text-orange-600/60' :
+                'text-violet-600/60'
+              }`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${
+                  cashFlow.total > 0 ? 'bg-blue-400' :
+                  cashFlow.total < 0 ? 'bg-orange-400' :
+                  'bg-violet-400'
+                }`}></span>
+                {cashFlow.total > 0 ? 'Surplus ✨' : cashFlow.total < 0 ? 'Deficit ⚠️' : 'Balanced ⚖️'}
+              </p>
             </div>
-            <h3 className="text-white/90 text-sm font-medium mb-1">Net Flow</h3>
-            <p className="text-3xl font-bold text-white">
-              {cashFlow.total >= 0 ? '+' : ''}RM{cashFlow.total.toFixed(2)}
-            </p>
-            <p className="text-white/70 text-xs mt-2">
-              {cashFlow.total > 0 ? 'Surplus' : cashFlow.total < 0 ? 'Deficit' : 'Balanced'}
-            </p>
           </div>
         </div>
 
-        {/* Pie Chart */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-white mb-6 text-center">Cash Flow Distribution</h2>
+        {/* Pie Chart with Aurora Theme */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-indigo-200 p-8 mb-6 shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
+          <h2 className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-purple-600 bg-clip-text text-transparent mb-8 text-center">
+            Cash Flow Distribution
+          </h2>
           
           {renderPieChart()}
 
-          {/* Legend */}
-          <div className="flex justify-center gap-6 mt-8">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-green-500"></div>
-              <span className="text-white text-sm">Cash In: RM{cashFlow.cashIn.toFixed(2)}</span>
+          {/* Legend with Aurora Colors */}
+          <div className="flex flex-wrap justify-center gap-6 mt-8">
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-400/20">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 animate-pulse"></div>
+              <span className="text-emerald-700 text-sm font-medium">Cash In: RM{(() => {
+                let cashIn = 0;
+                transactions.forEach(tx => {
+                  if (selectedCard !== 'all') {
+                    if (tx.recipientCardNumber === selectedCard) cashIn += tx.amount;
+                  } else {
+                    if (tx.recipientUserId === userId) cashIn += tx.amount;
+                  }
+                });
+                return cashIn.toFixed(2);
+              })()}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-red-500"></div>
-              <span className="text-white text-sm">Cash Out: RM{cashFlow.cashOut.toFixed(2)}</span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 rounded-full border border-rose-400/20">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-rose-400 to-pink-400 animate-pulse"></div>
+              <span className="text-rose-700 text-sm font-medium">Cash Out: RM{(() => {
+                let cashOut = 0;
+                transactions.forEach(tx => {
+                  if (selectedCard !== 'all') {
+                    if (tx.senderCardNumber === selectedCard) cashOut += tx.amount;
+                  } else {
+                    if (tx.senderUserId === userId) cashOut += tx.amount;
+                  }
+                });
+                return cashOut.toFixed(2);
+              })()}</span>
             </div>
-            {cashFlow.cashIn === 0 && cashFlow.cashOut === 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-                <span className="text-white text-sm">No Flow</span>
-              </div>
-            )}
+            {(() => {
+              let cashIn = 0, cashOut = 0;
+              transactions.forEach(tx => {
+                if (selectedCard !== 'all') {
+                  if (tx.recipientCardNumber === selectedCard) cashIn += tx.amount;
+                  if (tx.senderCardNumber === selectedCard) cashOut += tx.amount;
+                } else {
+                  if (tx.recipientUserId === userId) cashIn += tx.amount;
+                  if (tx.senderUserId === userId) cashOut += tx.amount;
+                }
+              });
+              return (cashIn === 0 && cashOut === 0) && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 rounded-full border border-violet-400/20">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-400 to-purple-400 animate-pulse"></div>
+                  <span className="text-violet-600 text-sm font-medium">No Flow</span>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
-        {/* Card Balances */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-white mb-4">Card Balances</h2>
-          
-          {/* Overall Balance */}
-          <button
-            onClick={() => setSelectedCard('all')}
-            className={`w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-4 mb-4 border transition-all ${
-              selectedCard === 'all' 
-                ? 'border-blue-400 shadow-lg shadow-blue-500/20 scale-105' 
-                : 'border-blue-400/30 hover:border-blue-400/50'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-left">
-                <p className="text-white/70 text-sm mb-1">Overall Balance</p>
-                <p className="text-3xl font-bold text-white">
-                  RM{cards.reduce((sum, card) => sum + (card.balance || 0), 0).toFixed(2)}
-                </p>
-              </div>
-              <div className="bg-white/10 p-3 rounded-lg">
-                <DollarSign className="w-8 h-8 text-white" />
-              </div>
+        {/* Card Balances - Simple Grid */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-indigo-200 p-6 mb-6 shadow-2xl hover:shadow-cyan-500/10 transition-all duration-300">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-gradient-to-br from-cyan-400/20 to-purple-400/20 rounded-lg">
+              <DollarSign className="w-6 h-6 text-cyan-700" />
             </div>
-            <p className="text-white/60 text-xs mt-2 text-left">
-              {cards.length} Card{cards.length !== 1 ? 's' : ''} Total
-              {selectedCard === 'all' && <span className="ml-2 text-blue-400">✓ Selected</span>}
-            </p>
-          </button>
+            <h2 className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-purple-600 bg-clip-text text-transparent">
+              Card Balances
+            </h2>
+          </div>
+          
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-block w-12 h-12 border-4 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin"></div>
+              <p className="text-gray-600 mt-4">Loading cards...</p>
+            </div>
+          ) : cards.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No cards found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Overall Balance Card */}
+              <button
+                onClick={() => setSelectedCard('all')}
+                className={`bg-gradient-to-br from-indigo-100/50 to-purple-100/50 backdrop-blur-sm rounded-2xl p-6 border transition-all duration-300 ${
+                  selectedCard === 'all' 
+                    ? 'border-indigo-400 shadow-lg shadow-indigo-300/50 scale-[1.02]' 
+                    : 'border-indigo-200 hover:border-indigo-300 hover:shadow-lg'
+                }`}
+              >
+                <div className="flex flex-col h-full justify-between min-h-[180px]">
+                  <div className="text-left">
+                    <p className="text-indigo-600 text-sm mb-2">Overall Balance</p>
+                    <p className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      RM{cards.reduce((sum, card) => sum + (card.balance || 0), 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="p-3 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
+                      <DollarSign className="w-10 h-10 text-indigo-600" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-indigo-600 text-xs">
+                        {cards.length} Card{cards.length !== 1 ? 's' : ''}
+                      </p>
+                      {selectedCard === 'all' && (
+                        <span className="text-indigo-700 font-semibold text-xs flex items-center gap-1 mt-1">
+                          <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                          Selected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </button>
 
-          {/* Individual Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cards.length === 0 ? (
-              <p className="text-white/70 text-center py-4 col-span-2">No cards found</p>
-            ) : (
-              cards.map((card, idx) => (
+              {/* Individual Cards */}
+              {cards.map((card, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSelectedCard(card.accountNumber)}
-                  className={`bg-white/5 rounded-lg p-4 border transition-all text-left ${
+                  className={`backdrop-blur-sm rounded-2xl p-6 border transition-all duration-300 text-left ${
                     selectedCard === card.accountNumber
-                      ? 'border-purple-400 shadow-lg shadow-purple-500/20 scale-105 bg-white/10'
-                      : 'border-white/10 hover:border-white/20 hover:bg-white/10'
+                      ? 'bg-gradient-to-br from-purple-100/70 to-pink-100/70 border-purple-400 shadow-lg shadow-purple-300/50 scale-[1.02]'
+                      : 'bg-white/70 border-indigo-200 hover:border-indigo-300 hover:bg-white/80 hover:shadow-lg'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-white font-semibold">{card.name}</p>
-                    <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded">
-                      {card.bank || 'Bank'}
-                    </span>
-                  </div>
-                  <p className="text-white/60 text-sm mb-2">****{card.accountNumber.slice(-4)}</p>
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold text-white">
-                      RM{(card.balance || 0).toFixed(2)}
-                    </p>
-                    {selectedCard === card.accountNumber && (
-                      <span className="text-purple-400 text-sm">✓ Selected</span>
-                    )}
+                  <div className="flex flex-col h-full justify-between min-h-[180px]">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-gray-900 font-semibold text-lg">{card.name}</p>
+                      </div>
+                      <span className="text-xs text-gray-600 bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-200 inline-block">
+                        {card.bank || 'Bank'}
+                      </span>
+                      <p className="text-gray-500 text-sm mt-3">****{card.accountNumber.slice(-4)}</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4">
+                      <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                        RM{(card.balance || 0).toFixed(2)}
+                      </p>
+                      {selectedCard === card.accountNumber && (
+                        <span className="text-purple-700 text-sm font-semibold flex items-center gap-1">
+                          <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
+                          Selected
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Recent Transactions */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white">Recent Transactions</h2>
+        {/* Recent Transactions with Aurora Theme */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-indigo-200 p-6 shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              {selectedCard && (
-                <span className="text-sm text-purple-400">
+              <div className="p-2 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-lg">
+                <ArrowUpRight className="w-6 h-6 text-purple-700" />
+              </div>
+              <h2 className="text-2xl font-semibold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
+                Recent Transactions
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              {selectedCard && selectedCard !== 'all' && (
+                <span className="text-sm text-purple-700 px-3 py-1.5 bg-purple-500/20 rounded-full border border-purple-400/30">
                   {cards.find(c => c.accountNumber === selectedCard)?.name || 'Selected Card'}
                 </span>
               )}
-              <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded">
+              <span className="text-xs text-gray-600 bg-white/80 px-3 py-1.5 rounded-full border border-indigo-300">
                 {transactions.filter(tx => {
                   if (selectedCard && selectedCard !== 'all') {
                     return tx.senderCardNumber === selectedCard || tx.recipientCardNumber === selectedCard;
@@ -760,19 +927,27 @@ export default function DashboardPage() {
               </span>
               <button
                 onClick={downloadPDF}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-all shadow-lg hover:shadow-xl"
+                className="group flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-gray-900 text-sm px-4 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-purple-500/50 hover:scale-105"
                 title="Download statement as PDF"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 group-hover:animate-bounce" />
                 <span>Download PDF</span>
               </button>
             </div>
           </div>
           
           {loading ? (
-            <p className="text-white/70 text-center py-8">Loading transactions...</p>
+            <div className="text-center py-12">
+              <div className="inline-block w-12 h-12 border-4 border-purple-400/30 border-t-purple-400 rounded-full animate-spin"></div>
+              <p className="text-gray-600 mt-4">Loading transactions...</p>
+            </div>
           ) : transactions.length === 0 ? (
-            <p className="text-white/70 text-center py-8">No transactions found for this period</p>
+            <div className="text-center py-12">
+              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full flex items-center justify-center">
+                <Calendar className="w-10 h-10 text-purple-700" />
+              </div>
+              <p className="text-gray-600">No transactions found for this period</p>
+            </div>
           ) : (
             (() => {
               const filteredTx = transactions.filter(tx => {
@@ -783,36 +958,50 @@ export default function DashboardPage() {
               });
               
               return filteredTx.length === 0 ? (
-                <p className="text-white/70 text-center py-8">No transactions found for this card</p>
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full flex items-center justify-center">
+                    <DollarSign className="w-10 h-10 text-purple-700" />
+                  </div>
+                  <p className="text-gray-600">No transactions found for this card</p>
+                </div>
               ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {filteredTx.slice(0, 10).map((tx, idx) => {
+                <div className="max-h-[600px] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-purple-400 scrollbar-track-indigo-100">
+                  {filteredTx.map((tx, idx) => {
                     const isIncoming = tx.recipientUserId === userId;
                     
                     return (
-                      <div key={idx} className="bg-white/5 rounded-lg p-4 flex items-center justify-between">
+                      <div key={idx} className={`backdrop-blur-sm rounded-xl p-4 flex items-center justify-between transition-all duration-300 border ${
+                        isIncoming 
+                          ? 'bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-400/20 hover:border-emerald-400/40' 
+                          : 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-400/20 hover:border-rose-400/40'
+                      }`}>
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${
-                            isIncoming ? 'bg-green-500/20' : 'bg-red-500/20'
+                          <div className={`p-2.5 rounded-xl backdrop-blur-sm ${
+                            isIncoming 
+                              ? 'bg-gradient-to-br from-emerald-400/30 to-cyan-400/30' 
+                              : 'bg-gradient-to-br from-rose-400/30 to-pink-400/30'
                           }`}>
                             {isIncoming ? (
-                              <ArrowDownLeft className="w-5 h-5 text-green-400" />
+                              <ArrowDownLeft className="w-5 h-5 text-emerald-700" />
                             ) : (
-                              <ArrowUpRight className="w-5 h-5 text-red-400" />
+                              <ArrowUpRight className="w-5 h-5 text-rose-700" />
                             )}
                           </div>
                           <div>
-                            <p className="text-white font-medium">
+                            <p className="text-gray-900 font-medium">
                               {isIncoming ? `From ${tx.senderName}` : `To ${tx.recipientName}`}
                             </p>
-                            <p className="text-white/60 text-sm">
+                            <p className="text-gray-500 text-xs mt-1 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
                               {new Date(tx.timestamp).toLocaleDateString()} {new Date(tx.timestamp).toLocaleTimeString()}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`text-lg font-bold ${
-                            isIncoming ? 'text-green-400' : 'text-red-400'
+                          <p className={`text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${
+                            isIncoming 
+                              ? 'from-emerald-600 to-cyan-600' 
+                              : 'from-rose-600 to-pink-600'
                           }`}>
                             {isIncoming ? '+' : '-'}RM{tx.amount.toFixed(2)}
                           </p>
@@ -826,17 +1015,28 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Logout Button */}
-        <div className="mt-6">
+        {/* Logout Button with Aurora */}
+        <div className="mt-8">
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full rounded-lg bg-red-600 hover:bg-red-700 px-4 py-3 text-sm font-medium text-white transition"
+            className="group w-full rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 px-6 py-4 text-base font-semibold text-gray-900 transition-all shadow-lg hover:shadow-rose-500/50 hover:scale-[1.02] flex items-center justify-center gap-2"
           >
-            Log out
+            <span>Log out</span>
+            <ArrowUpRight className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
