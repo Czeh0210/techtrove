@@ -152,7 +152,7 @@ export default function BankingChatbot() {
           // Welcome message with card info
           setMessages([{
             role: 'assistant',
-            content: `Welcome to TechTrove Banking! 🏦\n\nYou have ${data.cards.length} card(s) registered.\nCurrent card: ${data.cards[0].name}\nCard Number: ${data.cards[0].accountNumber}\nBalance: RM${(data.cards[0].balance || 1000).toFixed(2)}\n\nI can help you with:\n• Transfer money - "transfer RM50 to [card number] [name]"\n• Check balance - "check balance"\n• View my cards - "my cards"\n• Transaction history - "history"\n\nHow can I assist you today?`,
+            content: `Welcome to Centryx! 💳\n\nYou have ${data.cards.length} card(s) registered.\nCurrent card: ${data.cards[0].name}\nCard Number: ${data.cards[0].accountNumber}\nBalance: RM${(data.cards[0].balance || 1000).toFixed(2)}\n\nI can help you with:\n• Transfer money - "transfer RM50 to [card number] [name]"\n• Check balance - "check balance"\n• View my cards - "my cards"\n• Transaction history - "history"\n\nHow can I assist you today?`,
             timestamp: new Date()
           }]);
         }
@@ -982,7 +982,7 @@ export default function BankingChatbot() {
 </head>
 <body>
   <div class="header">
-    <h1>🏦 TechTrove Banking</h1>
+    <h1>💳 Centryx</h1>
     <p>Transaction Statement</p>
   </div>
 
@@ -1061,7 +1061,7 @@ export default function BankingChatbot() {
 
   <div class="footer">
     <p>This is a computer-generated statement and does not require a signature.</p>
-    <p>TechTrove Banking © ${new Date().getFullYear()} • Confidential Document</p>
+    <p>Centryx © ${new Date().getFullYear()} • Confidential Document</p>
   </div>
 </body>
 </html>
