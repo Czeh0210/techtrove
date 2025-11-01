@@ -37,7 +37,7 @@ export function NavBar({
         className
       )}>
       <div
-        className="flex items-center gap-3 bg-background/5 border border-border backdrop-blur-lg py-1 px-1 rounded-full shadow-lg pointer-events-auto">
+        className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm py-1 px-1 rounded-full pointer-events-auto text-text">
         {items.map((item) => {
           const Icon = item.icon
           const isActive = activeTab === item.name
@@ -49,8 +49,8 @@ export function NavBar({
               onClick={() => setActiveTab(item.name)}
               className={cn(
                 "relative cursor-pointer text-sm font-semibold px-6 py-2 rounded-full transition-colors",
-                "text-foreground/80 hover:text-primary",
-                isActive && "bg-muted text-primary"
+                "text-text hover:text-primary",
+                isActive && "bg-primary/10 text-primary"
               )}>
               <span className="hidden md:inline">{item.name}</span>
               <span className="md:hidden">
@@ -59,7 +59,7 @@ export function NavBar({
               {isActive && (
                 <motion.div
                   layoutId="lamp"
-                  className="absolute inset-0 w-full bg-primary/5 rounded-full -z-10"
+                  className="absolute inset-0 w-full bg-primary/10 rounded-full -z-10"
                   initial={false}
                   transition={{
                     type: "spring",
