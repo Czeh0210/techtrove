@@ -24,6 +24,8 @@ export default function BankingChatbot() {
     type: null // 'history'
   });
   const [isClient, setIsClient] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(true);
   const messagesEndRef = useRef(null);
 
   // Load from localStorage on client side only
@@ -50,15 +52,12 @@ export default function BankingChatbot() {
         console.log('Saved card loaded:', parsedCard.name);
       }
     } catch (error) {
-      console.error('Failed to load chat history:', error);
+      console.log('Failed to load chat history:', error);
     }
-  }, []);
-
-  // Load chat history from localStorage
-  useEffect(() => {
-    // Check session after chat history is loaded
+    
+    // Check session after client is ready
     checkSession();
-  }, [isClient]);
+  }, []);
 
   // Save chat history to localStorage whenever messages change
   useEffect(() => {
@@ -132,8 +131,12 @@ export default function BankingChatbot() {
     try {
       const res = await fetch(`/api/cards/list?userId=${uid}`);
       const data = await res.json();
+      console.log('🔍 API Response:', data);
+      console.log('🔍 Loaded cards from API:', data.cards?.length, 'cards');
       if (data.ok && data.cards.length > 0) {
         setUserCards(data.cards);
+        console.log('✅ Updated userCards state with', data.cards.length, 'cards');
+        console.log('✅ Full userCards data:', data.cards);
         
         // Check if we already have a saved card and messages
         const hasSavedChat = messages.length > 0 && currentCard;
@@ -175,6 +178,12 @@ export default function BankingChatbot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Monitor userCards state changes
+  useEffect(() => {
+    console.log('📊 userCards state changed:', userCards.length, 'cards');
+    console.log('📊 Current userCards:', userCards);
+  }, [userCards]);
 
   const processCommand = async (userInput) => {
     const input = userInput.toLowerCase().trim();
@@ -1244,79 +1253,192 @@ export default function BankingChatbot() {
     setLoading(false);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Navigation />
-      
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <Bot className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">Banking Assistant</h1>
-                  <p className="text-white/80 text-sm">Your AI-powered financial assistant</p>
-                </div>
-              </div>
-              {currentCard && (
-                <div className="bg-white/20 px-4 py-2 rounded-lg">
-                  <p className="text-white text-xs">Active Card</p>
-                  <p className="text-white font-semibold">{currentCard.name}</p>
-                  <p className="text-white/80 text-xs">RM{(currentCard.balance || 1000).toFixed(2)}</p>
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  if (confirm('Clear all chat history? This cannot be undone.')) {
-                    localStorage.removeItem('chatHistory');
-                    localStorage.removeItem('chatActiveCard');
-                    setMessages([{
-                      role: 'assistant',
-                      content: 'Chat history cleared. How can I help you today?',
-                      timestamp: new Date()
-                    }]);
-                  }
-                }}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-2 rounded-lg border border-white/20 transition-all"
-                title="Clear chat history"
-              >
-                🗑️ Clear Chat
-              </button>
+  // Prevent hydration mismatch by not rendering until client-side is ready
+  if (!isClient) {
+    return (
+      <div className="min-h-screen w-full relative overflow-hidden bg-white">
+        <Navigation />
+        
+        <div className="flex pt-20">
+        {/* Sidebar */}
+        <div className="w-64 bg-white shadow-xl border-r border-gray-200 flex flex-col p-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-white p-2 rounded-lg border border-gray-200">
+              <Bot className="w-6 h-6 text-black" />
+            </div>
+            <div>
+              <h2 className="font-bold text-black text-sm">CENTRYX CHATBOT</h2>
+              <p className="text-xs text-black">Loading...</p>
             </div>
           </div>
+        </div>
 
-          {/* Messages */}
-          <div className="h-[500px] overflow-y-auto p-6 space-y-4 bg-slate-900/50">
+        {/* Main Content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <Loader2 className="w-12 h-12 text-black animate-spin" />
+        </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full relative overflow-hidden bg-white">
+      {/* Main Navigation Bar - Separate at the top */}
+      <Navigation />
+
+      {/* Main Content Area with Sidebar and Chat */}
+      <div className="flex pt-20">
+      
+      {/* Sidebar */}
+      <div 
+        className={`${
+          sidebarOpen ? 'w-72' : 'w-0'
+        } bg-white shadow-2xl border-r border-gray-200 flex flex-col transition-all duration-300 overflow-hidden h-screen`}
+      >
+        {/* CENTRYX CHATBOT Header in Sidebar */}
+        <div className="p-4 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-2 rounded-xl border border-gray-200">
+              <Bot className="w-6 h-6 text-black" />
+            </div>
+            <div>
+              <h2 className="font-bold text-black text-base whitespace-nowrap">CENTRYX CHATBOT</h2>
+              <p className="text-xs text-black whitespace-nowrap">ASSISTANT</p>
+            </div>
+          </div>
+        </div>
+
+        {/* New Chat Button - Below navbar */}
+        <div className="p-4 border-b border-gray-200">
+          <button
+            onClick={() => {
+              if (confirm('Start a new chat? Current conversation will be saved.')) {
+                localStorage.removeItem('chatHistory');
+                localStorage.removeItem('chatActiveCard');
+                setMessages([{
+                  role: 'assistant',
+                  content: '👋 Welcome! How can I help you today?',
+                  timestamp: new Date()
+                }]);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl font-semibold text-sm border border-gray-200"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor" 
+              strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+          </button>
+        </div>
+
+        {/* Active Card Info */}
+        {currentCard && (
+          <div className="p-6 border-b border-gray-200 bg-white">
+            <p className="text-xs text-black mb-3 font-semibold uppercase tracking-wider">Active Card</p>
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+              <p className="font-bold text-black text-sm mb-2">{currentCard.name}</p>
+              <p className="text-xs text-black mb-3 font-mono bg-gray-50 px-2 py-1 rounded">{currentCard.accountNumber}</p>
+              <p className="text-2xl font-bold text-black">RM{(currentCard.balance || 1000).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Spacer to push Clear Chat button to bottom */}
+        <div className="flex-1"></div>
+
+        {/* Clear Chat Button */}
+        <div className="p-6 border-t border-gray-200 bg-white">
+          <button
+            onClick={() => {
+              if (confirm('Clear all chat history? This cannot be undone.')) {
+                localStorage.removeItem('chatHistory');
+                localStorage.removeItem('chatActiveCard');
+                setMessages([{
+                  role: 'assistant',
+                  content: 'Chat history cleared. How can I help you today?',
+                  timestamp: new Date()
+                }]);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all duration-200 font-semibold text-sm border-2 border-gray-200"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Clear Chat
+          </button>
+        </div>
+      </div>
+
+      {/* Sidebar Toggle Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-50 bg-white text-black p-3 rounded-r-xl shadow-2xl border border-gray-200 hover:bg-gray-50 transition-all duration-300 hover:scale-110"
+        style={{ marginLeft: sidebarOpen ? '288px' : '0px', transition: 'margin-left 300ms' }}
+      >
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className={`h-6 w-6 transition-transform duration-300 ${sidebarOpen ? '' : 'rotate-180'}`}
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-[calc(100vh-5rem)]">
+        {/* Horizontal Line Separator */}
+        <div className="border-b-2 border-gray-200"></div>
+
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex flex-col h-full">
+
+            {/* Messages Area - Scrollable with bottom padding for fixed input */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 pb-56 bg-white">
+              <div className="max-w-6xl mx-auto space-y-4">
             {messages.map((message, index) => (
               <div
                 key={index}
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {message.role === 'assistant' && (
-                  <div className="bg-purple-600 p-2 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-white" />
+                  <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center flex-shrink-0 shadow-lg border border-gray-200">
+                    <Bot className="w-5 h-5 text-black" />
                   </div>
                 )}
                 
                 <div
-                  className={`max-w-[75%] rounded-2xl p-4 ${
+                  className={`max-w-[70%] rounded-2xl p-5 shadow-lg ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'error'
-                      ? 'bg-red-500/20 text-red-100 border border-red-500/30'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'success'
-                      ? 'bg-green-500/20 text-green-100 border border-green-500/30'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'balance'
-                      ? 'bg-blue-500/20 text-blue-100 border border-blue-500/30'
-                      : 'bg-white/10 text-white border border-white/20'
+                      ? 'bg-white text-black border-2 border-gray-200'
+                      : 'bg-white text-black border-2 border-gray-200'
                   }`}
                 >
                   <p className="whitespace-pre-line text-sm leading-relaxed">{message.content}</p>
-                  <p className="text-xs mt-2 opacity-70">
+                  <p className={`text-xs mt-3 opacity-60`}>
                     {message.timestamp instanceof Date 
                       ? message.timestamp.toLocaleTimeString() 
                       : new Date(message.timestamp).toLocaleTimeString()
@@ -1356,7 +1478,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl border border-gray-200"
                       >
                         ✅ Confirm Transfer
                       </button>
@@ -1390,7 +1512,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl border-2 border-gray-200"
                       >
                         ❌ Cancel
                       </button>
@@ -1430,7 +1552,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2 border border-gray-200"
                       >
                         ✅ Yes, Take Me There
                       </button>
@@ -1464,7 +1586,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2 border-2 border-gray-200"
                       >
                         ❌ No, Stay Here
                       </button>
@@ -1473,8 +1595,8 @@ export default function BankingChatbot() {
                 </div>
 
                 {message.role === 'user' && (
-                  <div className="bg-blue-600 p-2 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-white" />
+                  <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center flex-shrink-0 shadow-lg border border-gray-200">
+                    <User className="w-5 h-5 text-black" />
                   </div>
                 )}
               </div>
@@ -1482,214 +1604,215 @@ export default function BankingChatbot() {
             
             {loading && (
               <div className="flex gap-3 justify-start">
-                <div className="bg-purple-600 p-2 rounded-full h-8 w-8 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
+                <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center shadow-lg border border-gray-200">
+                  <Bot className="w-5 h-5 text-black" />
                 </div>
-                <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                <div className="bg-white rounded-2xl p-5 border-2 border-gray-200 shadow-lg">
+                  <Loader2 className="w-6 h-6 text-black animate-spin" />
                 </div>
               </div>
             )}
             
             <div ref={messagesEndRef} />
           </div>
+        </div>
+        </div>
 
-          {/* Input */}
-          <form onSubmit={handleSendMessage} className="p-4 bg-slate-900/70 border-t border-white/10">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message... (e.g., 'transfer RM50 to 1234567890123456 John Doe')"
-                className="flex-1 bg-white/10 text-white placeholder-white/50 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                disabled={loading || !currentCard}
-              />
-              <button
-                type="submit"
-                disabled={loading || !input.trim() || !currentCard}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl px-6 py-3 hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </form>
+        {/* Fixed Input Area at Bottom - Completely isolated from scroll */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-40" style={{ marginLeft: sidebarOpen ? '288px' : '0px', transition: 'margin-left 300ms' }}>
+          <div className="max-w-6xl mx-auto p-6">
+            {/* Quick Actions - Collapsible */}
+            {quickActionsOpen && (
+            <div className="mb-4">
+              <p className="text-black font-semibold text-sm mb-3 uppercase tracking-wider">Quick Actions:</p>
+              <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'transfer money',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('transfer money');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-4 py-2 rounded-lg transition-all disabled:opacity-50 font-semibold shadow-md hover:shadow-lg border border-gray-200"
+                  >
+                    💸 Make Transaction
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'check balance',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('check balance');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    💰 Check Balance
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'my cards',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('my cards');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    🏦 My Cards
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'transaction history',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('transaction history');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    📜 History
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'download statement',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('download statement');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    📄 Download
+                  </button>
+                </div>
+              </div>
+            )}
 
-          {/* Quick Actions */}
-          <div className="p-4 bg-slate-900/50 border-t border-white/10">
-            <p className="text-white/60 text-xs mb-2">Quick Actions:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'transfer money',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('transfer money');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs px-4 py-2 rounded-lg border border-white/20 transition-all disabled:opacity-50 font-semibold"
-              >
-                💸 Make Transaction
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'check balance',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('check balance');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                💰 Check Balance
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'my cards',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('my cards');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                🏦 My Cards
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'transaction history',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('transaction history');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                📜 History
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'download statement',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('download statement');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                📄 Download
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || userCards.length <= 1 || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'switch card',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('switch card');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || userCards.length <= 1 || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                🔄 Switch Card
-              </button>
-            </div>
+            {/* Input Form */}
+            <form onSubmit={handleSendMessage} className="mt-4">
+              <div className="flex gap-3 items-center">
+                {/* Toggle Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => setQuickActionsOpen(!quickActionsOpen)}
+                  className="bg-white text-black p-3 rounded-xl hover:bg-gray-50 transition-all border border-gray-200 shadow-md flex-shrink-0"
+                  title={quickActionsOpen ? "Hide Quick Actions" : "Show Quick Actions"}
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className={`h-5 w-5 transition-transform duration-300 ${quickActionsOpen ? 'rotate-90' : '-rotate-90'}`}
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type your message... (e.g., 'transfer RM50 to 1234567890123456 John Doe')"
+                  className="flex-1 bg-white text-black placeholder-gray-400 border-2 border-gray-200 rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent shadow-lg text-base"
+                  disabled={loading || !currentCard}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim() || !currentCard}
+                  className="bg-white text-black rounded-2xl px-8 py-4 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xl hover:shadow-2xl font-semibold border border-gray-200"
+                >
+                  <Send className="w-6 h-6" />
+                </button>
+              </div>
+            </form>
           </div>
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );
