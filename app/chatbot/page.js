@@ -1,20 +1,33 @@
 ﻿"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { AIAssistantCard } from "@/components/ui/ai-assistant-card";
+import { Button } from "@/components/ui/button";
+import { LayoutDashboard, LogOut } from "lucide-react";
 
 function formatCurrency(n) {
   return "RM " + Number(n).toLocaleString("ms-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function ChatbotPage() {
+  const router = useRouter();
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [loginUser, setLoginUser] = useState("demo");
   const [loginPass, setLoginPass] = useState("");
   const [conversationHistory, setConversationHistory] = useState([]);
+
+  // Load token from localStorage on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('authToken');
+    if (savedToken) {
+      setToken(savedToken);
+    }
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -31,6 +44,8 @@ export default function ChatbotPage() {
       if (res.ok) {
         const data = await res.json();
         setUser(data);
+        // Update localStorage with displayName once we have it
+        localStorage.setItem('userName', data.displayName || data.username);
       }
     } catch (err) {
       console.error("Load user error:", err);
@@ -47,10 +62,23 @@ export default function ChatbotPage() {
     if (res.ok) {
       const data = await res.json();
       setToken(data.token);
+      // Save token to localStorage
+      localStorage.setItem('authToken', data.token);
+      // Save username (we'll get displayName from /api/auth/me after)
+      localStorage.setItem('userName', loginUser);
     } else {
       alert("Login failed");
     }
   }
+
+  // Logout handler
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userName');
+    setToken(null);
+    setUser(null);
+    setConversationHistory([]);
+  };
 
   async function loadBalance() {
     const res = await fetch(`/api/transactions`, {
@@ -190,15 +218,25 @@ export default function ChatbotPage() {
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center p-6 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-slate-900 dark:to-black">
+      {/* Dashboard and Logout Links */}
+      <div className="fixed top-6 right-6 z-50 flex gap-2">
+        <Link href="/dashboard">
+          <Button className="gap-2 shadow-lg hover:shadow-xl transition-all">
+            <LayoutDashboard className="h-4 w-4" />
+            Dashboard
+          </Button>
+        </Link>
+        <Button 
+          variant="outline" 
+          className="gap-2 shadow-lg hover:shadow-xl transition-all"
+          onClick={handleLogout}
+        >
+          <LogOut className="h-4 w-4" />
+          Logout
+        </Button>
+      </div>
+      
       <div className="relative w-full max-w-7xl">
-        {/* Balance Display - floating on top right */}
-        <div className="absolute -top-3 -right-3 z-10 px-5 py-3 bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-lg shadow-lg">
-          <div className="text-right">
-            <p className="text-xs opacity-90">{user?.username ?? "demo"}</p>
-            <p className="text-xl font-bold">{formatCurrency(balance)}</p>
-          </div>
-        </div>
-        
         <AIAssistantCard 
           userName={user?.displayName || user?.username || "User"}
           onPromptClick={handlePromptClick}

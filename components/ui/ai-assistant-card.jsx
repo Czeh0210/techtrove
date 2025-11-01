@@ -174,45 +174,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
   };
 
   return (
-    <Card className="flex w-full max-w-5xl mx-auto flex-col gap-4 p-6 shadow-none" style={{ height: '90vh', maxHeight: '900px' }}>
-      <div className="flex flex-row items-center justify-end p-0">
-        <Button variant="ghost" size="icon" className="size-8">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="1em"
-            height="1em"
-            viewBox="0 0 24 24"
-            className="size-4 text-muted-foreground"
-          >
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M4 5a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0M4 19a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0m7 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0"
-            />
-          </svg>
-        </Button>
-        <Button variant="ghost" size="icon" className="size-8">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-4 text-muted-foreground"
-          >
-            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-            <path d="M18 6l-12 12" />
-            <path d="M6 6l12 12" />
-          </svg>
-        </Button>
-      </div>
+    <Card className="flex w-full max-w-5xl mx-auto flex-col gap-4 p-6 shadow-2xl border-2 border-primary/10 bg-gradient-to-br from-background to-muted/30 backdrop-blur-sm" style={{ height: '90vh', maxHeight: '900px' }}>
       <CardContent className="flex flex-1 flex-col p-0 min-h-0">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center space-y-6 p-8 flex-1">
@@ -418,24 +380,26 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
           </svg>
 
           <div className="flex flex-col space-y-2 text-center">
-            <div className="flex flex-col">
-              <h2 className="text-xl font-medium tracking-tight text-muted-foreground">
-                Hi {userName},
-              </h2>
-              <h3 className="text-lg font-medium tracking-[-0.006em]">
-                Welcome back! How can I help?
+            <div className="flex flex-col items-center">
+              <div className="mb-2 px-6 py-2 bg-gradient-to-r from-primary/20 to-primary/10 rounded-full border border-primary/30">
+                <h2 className="text-xl font-semibold tracking-tight text-primary">
+                  Hi {userName}! 👋
+                </h2>
+              </div>
+              <h3 className="text-lg font-medium tracking-[-0.006em] text-foreground">
+                Welcome to TechTrove Banking
               </h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground max-w-md">
               I'm here to help you with your banking needs. Choose from the options
               below or just tell me what you need!
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-3 max-w-2xl">
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-950 border-2"
               onClick={() => handlePromptClickInternal("Check Balance")}
             >
               <Wallet aria-hidden="true" className="text-blue-500" />
@@ -443,7 +407,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
             </Badge>
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-orange-50 hover:border-orange-300 dark:hover:bg-orange-950 border-2"
               onClick={() => handlePromptClickInternal("Transfer Money")}
             >
               <ArrowRightLeft
@@ -454,7 +418,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
             </Badge>
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950 border-2"
               onClick={() => handlePromptClickInternal("Make Payment")}
             >
               <DollarSign aria-hidden="true" className="text-green-500" />
@@ -462,7 +426,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
             </Badge>
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-pink-50 hover:border-pink-300 dark:hover:bg-pink-950 border-2"
               onClick={() => handlePromptClickInternal("View Transactions")}
             >
               <Receipt aria-hidden="true" className="text-pink-500" />
@@ -470,7 +434,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
             </Badge>
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-yellow-50 hover:border-yellow-300 dark:hover:bg-yellow-950 border-2"
               onClick={() => handlePromptClickInternal("Download Statement")}
             >
               <FileText aria-hidden="true" className="text-yellow-500" />
@@ -478,7 +442,7 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
             </Badge>
             <Badge
               variant="secondary"
-              className="h-7 min-w-7 cursor-pointer gap-1.5 [&_svg]:-ms-px [&_svg]:shrink-0 text-xs [&_svg]:size-3.5 rounded-md"
+              className="h-9 min-w-9 cursor-pointer gap-2 [&_svg]:-ms-px [&_svg]:shrink-0 text-sm [&_svg]:size-4 rounded-xl transition-all duration-200 hover:scale-110 hover:shadow-xl hover:bg-purple-50 hover:border-purple-300 dark:hover:bg-purple-950 border-2"
               onClick={() => handlePromptClickInternal("Help")}
             >
               <Sparkles aria-hidden="true" className="text-purple-500" />
@@ -487,13 +451,13 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
           </div>
         </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 scroll-smooth">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-md ${
                   msg.role === 'user' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-muted text-foreground'
+                    ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground' 
+                    : 'bg-gradient-to-br from-muted to-muted/50 text-foreground border border-border'
                 }`}>
                   <p className="text-sm whitespace-pre-wrap">
                     {msg.role === 'assistant' && typingMessageIndex === i 
@@ -523,30 +487,30 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
 
         {/* Quick Reply Buttons (Yes/No) */}
         {showQuickReplies && (
-          <div className="flex gap-3 px-6 pb-4 justify-center">
+          <div className="flex gap-3 px-6 pb-4 justify-center animate-in slide-in-from-bottom duration-300">
             <Button
               onClick={() => handleQuickReply("Yes")}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg shadow-md transition-all hover:scale-105"
+              className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-8 py-2.5 rounded-xl shadow-lg transition-all hover:scale-105 hover:shadow-xl"
             >
-              <Check className="h-4 w-4" />
-              Yes
+              <Check className="h-5 w-5" />
+              Yes, Confirm
             </Button>
             <Button
               onClick={() => handleQuickReply("No")}
               variant="outline"
-              className="flex items-center gap-2 border-2 border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-950 px-6 py-2 rounded-lg shadow-md transition-all hover:scale-105"
+              className="flex items-center gap-2 border-2 border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-950 px-8 py-2.5 rounded-xl shadow-lg transition-all hover:scale-105 hover:shadow-xl"
             >
-              <X className="h-4 w-4" />
-              No
+              <X className="h-5 w-5" />
+              No, Cancel
             </Button>
           </div>
         )}
 
         <div className="relative mt-auto pt-4">
-          <div className="relative rounded-md ring-1 ring-border">
+          <div className="relative rounded-xl ring-2 ring-primary/20 focus-within:ring-primary/40 transition-all duration-200 shadow-lg">
             <Textarea
               placeholder="Type your message here..."
-              className="min-h-[80px] resize-none border-none py-3 px-4 shadow-none focus-visible:ring-0 text-sm"
+              className="min-h-[80px] resize-none border-none py-3 px-4 shadow-none focus-visible:ring-0 text-sm bg-background/50 rounded-xl"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -556,14 +520,15 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
               onClick={handleSend}
               disabled={!message.trim()}
               size="icon"
-              className="absolute bottom-3 right-3 h-8 w-8 rounded-md"
+              className="absolute bottom-3 right-3 h-9 w-9 rounded-lg bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary shadow-md hover:shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
           
-          <p className="text-xs text-center text-muted-foreground mt-2">
-            Press Enter to send, Shift+Enter for new line
+          <p className="text-xs text-center text-muted-foreground mt-2 flex items-center justify-center gap-1">
+            <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] border">Enter</kbd> to send • 
+            <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] border">Shift+Enter</kbd> for new line
           </p>
         </div>
       </CardContent>
