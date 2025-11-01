@@ -62,20 +62,46 @@ export async function POST(request) {
         return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
       }
       
-      // Generate unique session ID
-      const sessionId = generateSessionId();
-      const loginTime = new Date();
-      
-      // Store session in database
       const sessions = db.collection("sessions");
-      await sessions.insertOne({
-        sessionId,
+      
+      // Check if user already has an active session
+      let existingSession = await sessions.findOne({ 
         userId: user._id,
-        email: user.email,
-        loginMethod: "password",
-        loginTime,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        expiresAt: { $gt: new Date() } // Not expired
       });
+      
+      let sessionId, loginTime;
+      
+      if (existingSession) {
+        // Reuse existing session
+        sessionId = existingSession.sessionId;
+        loginTime = existingSession.loginTime;
+        
+        // Update login time and extend expiration
+        await sessions.updateOne(
+          { sessionId },
+          { 
+            $set: { 
+              lastLoginTime: new Date(),
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // Extend 24 hours
+            } 
+          }
+        );
+      } else {
+        // Generate new session ID only if no active session exists
+        sessionId = generateSessionId();
+        loginTime = new Date();
+        
+        await sessions.insertOne({
+          sessionId,
+          userId: user._id,
+          email: user.email,
+          loginMethod: "password",
+          loginTime,
+          lastLoginTime: loginTime,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        });
+      }
       
       return NextResponse.json({ 
         ok: true, 
@@ -112,21 +138,49 @@ export async function POST(request) {
         );
       }
       
-      // Generate unique session ID
-      const sessionId = generateSessionId();
-      const loginTime = new Date();
-      
-      // Store session in database
       const sessions = db.collection("sessions");
-      await sessions.insertOne({
-        sessionId,
+      
+      // Check if user already has an active session
+      let existingSession = await sessions.findOne({ 
         userId: user._id,
-        email: user.email,
-        loginMethod: "face",
-        loginTime,
-        faceMatchScore: { similarity: maxSim, distance: minDist },
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        expiresAt: { $gt: new Date() } // Not expired
       });
+      
+      let sessionId, loginTime;
+      
+      if (existingSession) {
+        // Reuse existing session
+        sessionId = existingSession.sessionId;
+        loginTime = existingSession.loginTime;
+        
+        // Update login time and extend expiration
+        await sessions.updateOne(
+          { sessionId },
+          { 
+            $set: { 
+              lastLoginTime: new Date(),
+              loginMethod: "face", // Update to latest login method
+              faceMatchScore: { similarity: maxSim, distance: minDist },
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // Extend 24 hours
+            } 
+          }
+        );
+      } else {
+        // Generate new session ID only if no active session exists
+        sessionId = generateSessionId();
+        loginTime = new Date();
+        
+        await sessions.insertOne({
+          sessionId,
+          userId: user._id,
+          email: user.email,
+          loginMethod: "face",
+          loginTime,
+          lastLoginTime: loginTime,
+          faceMatchScore: { similarity: maxSim, distance: minDist },
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        });
+      }
       
       return NextResponse.json({ 
         ok: true, 
