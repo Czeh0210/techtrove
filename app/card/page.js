@@ -187,36 +187,50 @@ export default function CardPage() {
         {cards.length > 0 && (
           <div className="space-y-6">
             {cards.map((card, index) => (
-              <div key={index} className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl shadow-2xl p-8 text-white">
-                <div className="mb-6">
-                  <div className="text-sm opacity-75 mb-1">Card Number</div>
-                  <div className="text-2xl font-mono tracking-wider">
-                    {formatAccountNumber(card.accountNumber)}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-end">
-                  <div>
-                    <div className="text-sm opacity-75 mb-1">Cardholder Name</div>
-                    <div className="text-xl font-semibold uppercase">
-                      {card.name}
+              <div key={index} className="relative group">
+                {/* Animated gradient border */}
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-gradient"></div>
+                
+                {/* Card content */}
+                <div className="relative bg-black rounded-2xl p-8 text-white">
+                  <div className="mb-6">
+                    <div className="text-sm opacity-60 mb-2">Card Number</div>
+                    <div className="text-2xl font-mono tracking-wider">
+                      {formatAccountNumber(card.accountNumber)}
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <div className="text-sm opacity-75 mb-1">Valid Thru</div>
-                    <div className="text-lg font-mono">{card.expiryDate}</div>
-                  </div>
-                </div>
+                  <div className="flex justify-between items-end mb-6">
+                    <div>
+                      <div className="text-sm opacity-60 mb-1">Cardholder Name</div>
+                      <div className="text-xl font-semibold uppercase">
+                        {card.name}
+                      </div>
+                    </div>
 
-                <div className="mt-6 pt-6 border-t border-white/30 flex justify-between">
-                  <div>
-                    <div className="text-sm opacity-75 mb-1">CVV</div>
-                    <div className="text-lg font-mono">{card.cvv}</div>
+                    <div className="text-right">
+                      <div className="text-sm opacity-60 mb-1">Valid Thru</div>
+                      <div className="text-lg font-mono">{card.expiryDate}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm opacity-75 mb-1">Created</div>
-                    <div className="text-sm">{card.createdDate}</div>
+
+                  <div className="pt-6 border-t border-white/10 flex justify-between">
+                    <div>
+                      <div className="text-sm opacity-60 mb-1">CVV</div>
+                      <div className="text-lg font-mono">{card.cvv}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm opacity-60 mb-1">Created</div>
+                      <div className="text-sm opacity-80">{card.createdDate}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Wave decoration in corner */}
+                  <div className="absolute bottom-6 right-6 opacity-40">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 20C8 20 12 12 20 12C28 12 32 20 32 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M8 28C8 28 12 20 20 20C28 20 32 28 32 28" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
                   </div>
                 </div>
               </div>
