@@ -266,3 +266,31 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Custom Scrollbar Styles */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+
+.scrollbar-thumb-purple-400::-webkit-scrollbar-thumb {
+  background: rgb(192 132 252 / 0.5);
+}
+
+.scrollbar-thumb-purple-400::-webkit-scrollbar-thumb:hover {
+  background: rgb(192 132 252 / 0.8);
+}
+
+.scrollbar-track-indigo-100::-webkit-scrollbar-track {
+  background: rgb(224 231 255 / 0.3);
+  border-radius: 9999px;
+}

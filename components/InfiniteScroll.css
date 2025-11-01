@@ -1,0 +1,22 @@
+.infinite-scroll-wrapper {
+  overflow: hidden;
+  position: relative;
+  perspective: 1000px;
+}
+
+.infinite-scroll-container {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  transform-style: preserve-3d;
+}
+
+.infinite-scroll-container:active {
+  cursor: grabbing;
+}
+
+.infinite-scroll-item {
+  position: absolute;
+  width: 100%;
+  will-change: transform;
+}

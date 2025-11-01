@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Loader2, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react';
 import Navigation from '@/components/Navigation';
+import dynamic from 'next/dynamic';
+
+const Camera = dynamic(() => import('@/components/Camera'), { ssr: false });
 
 export default function BankingChatbot() {
   const [messages, setMessages] = useState([]);
@@ -13,17 +16,27 @@ export default function BankingChatbot() {
   const [currentCard, setCurrentCard] = useState(null);
   const [transferState, setTransferState] = useState({
     active: false,
-    step: null, // 'amount', 'card', 'confirm'
+    step: null, // 'amount', 'card', 'confirm', 'verify'
     amount: null,
     recipientCard: null,
     recipientName: null,
     bank: null
+  });
+  const [verificationState, setVerificationState] = useState({
+    active: false,
+    method: null, // 'password' or 'faceid'
+    password: '',
+    error: null,
+    faceEmbedding: null,
+    scanning: false
   });
   const [dashboardRedirect, setDashboardRedirect] = useState({
     pending: false,
     type: null // 'history'
   });
   const [isClient, setIsClient] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(true);
   const messagesEndRef = useRef(null);
 
   // Load from localStorage on client side only
@@ -50,15 +63,12 @@ export default function BankingChatbot() {
         console.log('Saved card loaded:', parsedCard.name);
       }
     } catch (error) {
-      console.error('Failed to load chat history:', error);
+      console.log('Failed to load chat history:', error);
     }
-  }, []);
-
-  // Load chat history from localStorage
-  useEffect(() => {
-    // Check session after chat history is loaded
+    
+    // Check session after client is ready
     checkSession();
-  }, [isClient]);
+  }, []);
 
   // Save chat history to localStorage whenever messages change
   useEffect(() => {
@@ -77,13 +87,15 @@ export default function BankingChatbot() {
 
   // Get user session
   const checkSession = async () => {
-    if (!isClient) return;
+    // Remove the isClient check here since we call it after setIsClient(true)
     
     try {
       // Try to get sessionId from localStorage
       const sessionId = localStorage.getItem('sessionId');
+      console.log('🔍 Checking session. sessionId from localStorage:', sessionId);
       
       if (!sessionId) {
+        console.log('❌ No sessionId found in localStorage. User needs to log in.');
         setMessages([{
           role: 'assistant',
           content: '👋 Welcome! I\'m your friendly banking assistant.\n\n🔐 To get started, please log in to access your cards and make transfers. I\'m here to help you manage your finances safely and easily!',
@@ -92,13 +104,17 @@ export default function BankingChatbot() {
         return;
       }
 
+      console.log('📡 Verifying session with API...');
       const res = await fetch('/api/auth/verify-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId })
       });
 
+      console.log('📡 Session verification status:', res.status, res.ok);
+
       if (!res.ok) {
+        console.log('❌ Session verification failed with status:', res.status);
         setMessages([{
           role: 'assistant',
           content: '⏰ Hi there! It looks like your session has expired for security reasons.\n\nPlease log in again, and I\'ll be right here to assist you with your banking needs!',
@@ -108,10 +124,13 @@ export default function BankingChatbot() {
       }
 
       const data = await res.json();
+      console.log('✅ Session verification response:', data);
       if (data.valid && data.session?.userId) {
+        console.log('✅ Setting userId to:', data.session.userId);
         setUserId(data.session.userId);
         await loadUserCards(data.session.userId);
       } else {
+        console.log('❌ Session invalid or no userId:', data);
         setMessages([{
           role: 'assistant',
           content: '👋 Hello! I\'m here to help you with your banking needs.\n\n🔐 Please log in first so I can assist you with transfers, balance checks, and more!',
@@ -130,10 +149,21 @@ export default function BankingChatbot() {
 
   const loadUserCards = async (uid) => {
     try {
-      const res = await fetch(`/api/cards/list?userId=${uid}`);
+      console.log('🔄 loadUserCards called with userId:', uid);
+      const apiUrl = `/api/cards/list?userId=${uid}`;
+      console.log('🔄 Fetching from:', apiUrl);
+      
+      const res = await fetch(apiUrl);
+      console.log('🔄 API Response status:', res.status, res.ok);
+      
       const data = await res.json();
-      if (data.ok && data.cards.length > 0) {
+      console.log('🔍 API Response:', data);
+      console.log('🔍 Loaded cards from API:', data.cards?.length, 'cards');
+      
+      if (data.ok && data.cards && data.cards.length > 0) {
         setUserCards(data.cards);
+        console.log('✅ Updated userCards state with', data.cards.length, 'cards');
+        console.log('✅ Full userCards data:', data.cards);
         
         // Check if we already have a saved card and messages
         const hasSavedChat = messages.length > 0 && currentCard;
@@ -152,7 +182,7 @@ export default function BankingChatbot() {
           // Welcome message with card info
           setMessages([{
             role: 'assistant',
-            content: `Welcome to TechTrove Banking! 🏦\n\nYou have ${data.cards.length} card(s) registered.\nCurrent card: ${data.cards[0].name}\nCard Number: ${data.cards[0].accountNumber}\nBalance: RM${(data.cards[0].balance || 1000).toFixed(2)}\n\nI can help you with:\n• Transfer money - "transfer RM50 to [card number] [name]"\n• Check balance - "check balance"\n• View my cards - "my cards"\n• Transaction history - "history"\n\nHow can I assist you today?`,
+            content: `Welcome to Centryx! 💳\n\nYou have ${data.cards.length} card(s) registered.\nCurrent card: ${data.cards[0].name}\nCard Number: ${data.cards[0].accountNumber}\nBalance: RM${(data.cards[0].balance || 1000).toFixed(2)}\n\nI can help you with:\n• Transfer money - "transfer RM50 to [card number] [name]"\n• Check balance - "check balance"\n• View my cards - "my cards"\n• Transaction history - "history"\n\nHow can I assist you today?`,
             timestamp: new Date()
           }]);
         }
@@ -175,6 +205,17 @@ export default function BankingChatbot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Monitor userId state changes
+  useEffect(() => {
+    console.log('👤 userId state changed to:', userId);
+  }, [userId]);
+
+  // Monitor userCards state changes
+  useEffect(() => {
+    console.log('📊 userCards state changed:', userCards.length, 'cards');
+    console.log('📊 Current userCards:', userCards);
+  }, [userCards]);
 
   const processCommand = async (userInput) => {
     const input = userInput.toLowerCase().trim();
@@ -234,6 +275,8 @@ export default function BankingChatbot() {
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.content
       }));
+
+      console.log('📤 Sending to chatbot API:', { userId, currentCard: currentCard?.name, userCardsCount: userCards.length });
 
       const aiResponse = await fetch('/api/chatbot/chat', {
         method: 'POST',
@@ -982,7 +1025,7 @@ export default function BankingChatbot() {
 </head>
 <body>
   <div class="header">
-    <h1>🏦 TechTrove Banking</h1>
+    <h1>💳 Centryx</h1>
     <p>Transaction Statement</p>
   </div>
 
@@ -1061,7 +1104,7 @@ export default function BankingChatbot() {
 
   <div class="footer">
     <p>This is a computer-generated statement and does not require a signature.</p>
-    <p>TechTrove Banking © ${new Date().getFullYear()} • Confidential Document</p>
+    <p>Centryx © ${new Date().getFullYear()} • Confidential Document</p>
   </div>
 </body>
 </html>
@@ -1244,79 +1287,225 @@ export default function BankingChatbot() {
     setLoading(false);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Navigation />
-      
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <Bot className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">Banking Assistant</h1>
-                  <p className="text-white/80 text-sm">Your AI-powered financial assistant</p>
-                </div>
-              </div>
-              {currentCard && (
-                <div className="bg-white/20 px-4 py-2 rounded-lg">
-                  <p className="text-white text-xs">Active Card</p>
-                  <p className="text-white font-semibold">{currentCard.name}</p>
-                  <p className="text-white/80 text-xs">RM{(currentCard.balance || 1000).toFixed(2)}</p>
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  if (confirm('Clear all chat history? This cannot be undone.')) {
-                    localStorage.removeItem('chatHistory');
-                    localStorage.removeItem('chatActiveCard');
-                    setMessages([{
-                      role: 'assistant',
-                      content: 'Chat history cleared. How can I help you today?',
-                      timestamp: new Date()
-                    }]);
-                  }
-                }}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-2 rounded-lg border border-white/20 transition-all"
-                title="Clear chat history"
-              >
-                🗑️ Clear Chat
-              </button>
+  // Prevent hydration mismatch by not rendering until client-side is ready
+  if (!isClient) {
+    return (
+      <div className="min-h-screen w-full relative overflow-hidden bg-white">
+        <Navigation />
+        
+        <div className="flex pt-20">
+        {/* Sidebar */}
+        <div className="w-64 bg-white shadow-xl border-r border-gray-200 flex flex-col p-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-white p-2 rounded-lg border border-gray-200">
+              <Bot className="w-6 h-6 text-black" />
+            </div>
+            <div>
+              <h2 className="font-bold text-black text-sm">CENTRYX CHATBOT</h2>
+              <p className="text-xs text-black">Loading...</p>
             </div>
           </div>
+        </div>
 
-          {/* Messages */}
-          <div className="h-[500px] overflow-y-auto p-6 space-y-4 bg-slate-900/50">
+        {/* Main Content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <Loader2 className="w-12 h-12 text-black animate-spin" />
+        </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full relative overflow-hidden bg-white">
+      {/* Main Navigation Bar - Separate at the top */}
+      <Navigation />
+
+      {/* Main Content Area with Sidebar and Chat */}
+      <div className="flex pt-20">
+      
+      {/* Sidebar */}
+      <div 
+        className={`${
+          sidebarOpen ? 'w-72' : 'w-0'
+        } bg-white shadow-2xl border-r border-gray-200 flex flex-col transition-all duration-300 overflow-hidden h-screen`}
+      >
+        {/* CENTRYX CHATBOT Header in Sidebar */}
+        <div className="p-4 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-2 rounded-xl border border-gray-200">
+              <Bot className="w-6 h-6 text-black" />
+            </div>
+            <div>
+              <h2 className="font-bold text-black text-base whitespace-nowrap">CENTRYX CHATBOT</h2>
+              <p className="text-xs text-black whitespace-nowrap">ASSISTANT</p>
+            </div>
+          </div>
+        </div>
+
+        {/* New Chat Button - Below navbar */}
+        <div className="p-4 border-b border-gray-200">
+          <button
+            onClick={() => {
+              if (confirm('Start a new chat? Current conversation will be saved.')) {
+                localStorage.removeItem('chatHistory');
+                localStorage.removeItem('chatActiveCard');
+                setMessages([{
+                  role: 'assistant',
+                  content: '👋 Welcome! How can I help you today?',
+                  timestamp: new Date()
+                }]);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl font-semibold text-sm border border-gray-200"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor" 
+              strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+          </button>
+        </div>
+
+        {/* Active Card Info */}
+        {currentCard && (
+          <div className="p-6 border-b border-gray-200 bg-white">
+            <p className="text-xs text-black mb-3 font-semibold uppercase tracking-wider">Active Card</p>
+            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-200">
+              <p className="font-bold text-black text-sm mb-2">{currentCard.name}</p>
+              <p className="text-xs text-black mb-3 font-mono bg-gray-50 px-2 py-1 rounded">{currentCard.accountNumber}</p>
+              <p className="text-2xl font-bold text-black">RM{(currentCard.balance || 1000).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Info & Actions */}
+        {!currentCard && (
+          <div className="p-6 border-b border-gray-200 bg-white">
+            <p className="text-xs text-black mb-2">Debug Info:</p>
+            <p className="text-xs text-black mb-3 font-mono bg-gray-50 px-2 py-1 rounded">
+              userId: {userId || 'null'}<br/>
+              cards: {userCards.length}
+            </p>
+            
+            <button
+              onClick={async () => {
+                console.log('🔄 Force refresh session and cards...');
+                await checkSession();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all border-2 border-gray-200 font-semibold text-sm mb-2"
+            >
+              🔄 Refresh Session
+            </button>
+            
+            {userId && (
+              <button
+                onClick={async () => {
+                  console.log('🔄 Manually reloading cards for userId:', userId);
+                  await loadUserCards(userId);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all border-2 border-gray-200 font-semibold text-sm"
+              >
+                � Reload Cards ({userCards.length})
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Spacer to push Clear Chat button to bottom */}
+        <div className="flex-1"></div>
+
+        {/* Clear Chat Button */}
+        <div className="p-6 border-t border-gray-200 bg-white">
+          <button
+            onClick={() => {
+              if (confirm('Clear all chat history? This cannot be undone.')) {
+                localStorage.removeItem('chatHistory');
+                localStorage.removeItem('chatActiveCard');
+                setMessages([{
+                  role: 'assistant',
+                  content: 'Chat history cleared. How can I help you today?',
+                  timestamp: new Date()
+                }]);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all duration-200 font-semibold text-sm border-2 border-gray-200"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Clear Chat
+          </button>
+        </div>
+      </div>
+
+      {/* Sidebar Toggle Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-50 bg-white text-black p-3 rounded-r-xl shadow-2xl border border-gray-200 hover:bg-gray-50 transition-all duration-300 hover:scale-110"
+        style={{ marginLeft: sidebarOpen ? '288px' : '0px', transition: 'margin-left 300ms' }}
+      >
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className={`h-6 w-6 transition-transform duration-300 ${sidebarOpen ? '' : 'rotate-180'}`}
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-[calc(100vh-5rem)]">
+        {/* Horizontal Line Separator */}
+        <div className="border-b-2 border-gray-200"></div>
+
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex flex-col h-full">
+
+            {/* Messages Area - Scrollable with bottom padding for fixed input */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 pb-56 bg-white">
+              <div className="max-w-6xl mx-auto space-y-4">
             {messages.map((message, index) => (
               <div
                 key={index}
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {message.role === 'assistant' && (
-                  <div className="bg-purple-600 p-2 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-white" />
+                  <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center flex-shrink-0 shadow-lg border border-gray-200">
+                    <Bot className="w-5 h-5 text-black" />
                   </div>
                 )}
                 
                 <div
-                  className={`max-w-[75%] rounded-2xl p-4 ${
+                  className={`max-w-[70%] rounded-2xl p-5 shadow-lg ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'error'
-                      ? 'bg-red-500/20 text-red-100 border border-red-500/30'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'success'
-                      ? 'bg-green-500/20 text-green-100 border border-green-500/30'
+                      ? 'bg-white text-black border-2 border-gray-200'
                       : message.type === 'balance'
-                      ? 'bg-blue-500/20 text-blue-100 border border-blue-500/30'
-                      : 'bg-white/10 text-white border border-white/20'
+                      ? 'bg-white text-black border-2 border-gray-200'
+                      : 'bg-white text-black border-2 border-gray-200'
                   }`}
                 >
                   <p className="whitespace-pre-line text-sm leading-relaxed">{message.content}</p>
-                  <p className="text-xs mt-2 opacity-70">
+                  <p className={`text-xs mt-3 opacity-60`}>
                     {message.timestamp instanceof Date 
                       ? message.timestamp.toLocaleTimeString() 
                       : new Date(message.timestamp).toLocaleTimeString()
@@ -1327,36 +1516,16 @@ export default function BankingChatbot() {
                   {message.showConfirmButtons && message.type === 'confirm' && (
                     <div className="flex gap-2 mt-4">
                       <button
-                        onClick={async () => {
-                          // Hide all confirmation buttons first
-                          setMessages(prev => prev.map(msg => ({
-                            ...msg,
-                            showConfirmButtons: false
-                          })));
-                          
-                          // Add user message
-                          setMessages(prev => [...prev, {
-                            role: 'user',
-                            content: 'confirm',
-                            timestamp: new Date()
-                          }]);
-                          
-                          setLoading(true);
-                          
-                          // Process the confirmation
-                          const response = await processCommand('confirm');
-                          
-                          setMessages(prev => [...prev, {
-                            role: 'assistant',
-                            content: response.content,
-                            type: response.type,
-                            showConfirmButtons: false,
-                            timestamp: new Date()
-                          }]);
-                          
-                          setLoading(false);
+                        onClick={() => {
+                          // Show verification modal instead of executing transfer
+                          setVerificationState({
+                            active: true,
+                            method: null,
+                            password: '',
+                            error: null
+                          });
                         }}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl border border-gray-200"
                       >
                         ✅ Confirm Transfer
                       </button>
@@ -1390,7 +1559,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl border-2 border-gray-200"
                       >
                         ❌ Cancel
                       </button>
@@ -1430,7 +1599,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2 border border-gray-200"
                       >
                         ✅ Yes, Take Me There
                       </button>
@@ -1464,7 +1633,7 @@ export default function BankingChatbot() {
                           
                           setLoading(false);
                         }}
-                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2 border-2 border-gray-200"
                       >
                         ❌ No, Stay Here
                       </button>
@@ -1473,8 +1642,8 @@ export default function BankingChatbot() {
                 </div>
 
                 {message.role === 'user' && (
-                  <div className="bg-blue-600 p-2 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-white" />
+                  <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center flex-shrink-0 shadow-lg border border-gray-200">
+                    <User className="w-5 h-5 text-black" />
                   </div>
                 )}
               </div>
@@ -1482,215 +1651,507 @@ export default function BankingChatbot() {
             
             {loading && (
               <div className="flex gap-3 justify-start">
-                <div className="bg-purple-600 p-2 rounded-full h-8 w-8 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
+                <div className="bg-white p-2.5 rounded-full h-10 w-10 flex items-center justify-center shadow-lg border border-gray-200">
+                  <Bot className="w-5 h-5 text-black" />
                 </div>
-                <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                <div className="bg-white rounded-2xl p-5 border-2 border-gray-200 shadow-lg">
+                  <Loader2 className="w-6 h-6 text-black animate-spin" />
                 </div>
               </div>
             )}
             
             <div ref={messagesEndRef} />
           </div>
+        </div>
+        </div>
 
-          {/* Input */}
-          <form onSubmit={handleSendMessage} className="p-4 bg-slate-900/70 border-t border-white/10">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message... (e.g., 'transfer RM50 to 1234567890123456 John Doe')"
-                className="flex-1 bg-white/10 text-white placeholder-white/50 border border-white/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                disabled={loading || !currentCard}
-              />
-              <button
-                type="submit"
-                disabled={loading || !input.trim() || !currentCard}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl px-6 py-3 hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </form>
+        {/* Fixed Input Area at Bottom - Completely isolated from scroll */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-40" style={{ marginLeft: sidebarOpen ? '288px' : '0px', transition: 'margin-left 300ms' }}>
+          <div className="max-w-6xl mx-auto p-6">
+            {/* Quick Actions - Collapsible */}
+            {quickActionsOpen && (
+            <div className="mb-4">
+              <p className="text-black font-semibold text-sm mb-3 uppercase tracking-wider">Quick Actions:</p>
+              <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'transfer money',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('transfer money');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-4 py-2 rounded-lg transition-all disabled:opacity-50 font-semibold shadow-md hover:shadow-lg border border-gray-200"
+                  >
+                    💸 Make Transaction
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'check balance',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('check balance');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    💰 Check Balance
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'my cards',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('my cards');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    🏦 My Cards
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'transaction history',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('transaction history');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    📜 History
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentCard || loading) return;
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'user',
+                        content: 'download statement',
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(true);
+                      const response = await processCommand('download statement');
+                      
+                      setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: response.content,
+                        type: response.type,
+                        showConfirmButtons: response.showConfirmButtons || false,
+                        timestamp: new Date()
+                      }]);
+                      
+                      setLoading(false);
+                    }}
+                    disabled={!currentCard || loading}
+                    className="bg-white hover:bg-gray-50 text-black text-xs px-3 py-2 rounded-lg border-2 border-gray-200 transition-all disabled:opacity-50 font-medium shadow-sm hover:shadow-md"
+                  >
+                    📄 Download
+                  </button>
+                </div>
+              </div>
+            )}
 
-          {/* Quick Actions */}
-          <div className="p-4 bg-slate-900/50 border-t border-white/10">
-            <p className="text-white/60 text-xs mb-2">Quick Actions:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'transfer money',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('transfer money');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs px-4 py-2 rounded-lg border border-white/20 transition-all disabled:opacity-50 font-semibold"
-              >
-                💸 Make Transaction
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'check balance',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('check balance');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                💰 Check Balance
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'my cards',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('my cards');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                🏦 My Cards
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'transaction history',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('transaction history');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                📜 History
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'download statement',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('download statement');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                📄 Download
-              </button>
-              <button
-                onClick={async () => {
-                  if (!currentCard || userCards.length <= 1 || loading) return;
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'user',
-                    content: 'switch card',
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(true);
-                  const response = await processCommand('switch card');
-                  
-                  setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.content,
-                    type: response.type,
-                    showConfirmButtons: response.showConfirmButtons || false,
-                    timestamp: new Date()
-                  }]);
-                  
-                  setLoading(false);
-                }}
-                disabled={!currentCard || userCards.length <= 1 || loading}
-                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
-              >
-                🔄 Switch Card
-              </button>
-            </div>
+            {/* Input Form */}
+            <form onSubmit={handleSendMessage} className="mt-4">
+              <div className="flex gap-3 items-center">
+                {/* Toggle Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => setQuickActionsOpen(!quickActionsOpen)}
+                  className="bg-white text-black p-3 rounded-xl hover:bg-gray-50 transition-all border border-gray-200 shadow-md flex-shrink-0"
+                  title={quickActionsOpen ? "Hide Quick Actions" : "Show Quick Actions"}
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className={`h-5 w-5 transition-transform duration-300 ${quickActionsOpen ? 'rotate-90' : '-rotate-90'}`}
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type your message... (e.g., 'transfer RM50 to 1234567890123456 John Doe')"
+                  className="flex-1 bg-white text-black placeholder-gray-400 border-2 border-gray-200 rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent shadow-lg text-base"
+                  disabled={loading || !currentCard}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim() || !currentCard}
+                  className="bg-white text-black rounded-2xl px-8 py-4 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xl hover:shadow-2xl font-semibold border border-gray-200"
+                >
+                  <Send className="w-6 h-6" />
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
+      </div>
+      </div>
+
+      {/* Verification Modal */}
+      {verificationState.active && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setVerificationState({ 
+          active: false, 
+          method: null, 
+          password: '', 
+          error: null,
+          faceEmbedding: null,
+          scanning: false
+        })}>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold text-black mb-2">🔒 Verify Transfer</h2>
+            <p className="text-gray-600 mb-6 text-sm">Choose your verification method to complete this transfer securely</p>
+            
+            {!verificationState.method ? (
+              // Method Selection
+              <div className="space-y-3">
+                <button
+                  onClick={() => setVerificationState({ ...verificationState, method: 'password' })}
+                  className="w-full bg-white hover:bg-gray-50 text-black font-semibold py-4 px-6 rounded-xl border-2 border-gray-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
+                >
+                  <span className="text-2xl">🔑</span>
+                  <span>Verify with Password</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setVerificationState({ 
+                      ...verificationState, 
+                      method: 'faceid',
+                      scanning: true,
+                      error: null
+                    });
+                  }}
+                  className="w-full bg-white hover:bg-gray-50 text-black font-semibold py-4 px-6 rounded-xl border-2 border-gray-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
+                >
+                  <span className="text-2xl">👤</span>
+                  <span>Verify with Face ID</span>
+                </button>
+                
+                {verificationState.error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {verificationState.error}
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setVerificationState({ 
+                    active: false, 
+                    method: null, 
+                    password: '', 
+                    error: null,
+                    faceEmbedding: null,
+                    scanning: false
+                  })}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : verificationState.method === 'password' ? (
+              // Password Input
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Enter Password</label>
+                  <input
+                    type="password"
+                    value={verificationState.password}
+                    onChange={(e) => setVerificationState({ ...verificationState, password: e.target.value })}
+                    placeholder="Enter your login password"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent text-black"
+                    autoFocus
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && verificationState.password) {
+                        handlePasswordVerification();
+                      }
+                    }}
+                  />
+                </div>
+                
+                {verificationState.error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {verificationState.error}
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={handlePasswordVerification}
+                    disabled={!verificationState.password}
+                    className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Verify
+                  </button>
+                  <button
+                    onClick={() => setVerificationState({ ...verificationState, method: null, password: '', error: null })}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : verificationState.scanning ? (
+              // Face ID Verification - Camera View
+              <div className="text-center py-4">
+                <div className="text-4xl mb-3">👤</div>
+                <p className="text-gray-600 mb-4 font-semibold">Position your face in the camera</p>
+                
+                {/* Camera Component */}
+                <div className="relative rounded-xl overflow-hidden border-2 border-gray-200 mb-4">
+                  <Camera 
+                    onEmbedding={(embedding) => {
+                      console.log('🎥 Face embedding received:', embedding ? 'YES' : 'NO', embedding?.length);
+                      // Store embedding from manual capture
+                      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
+                        console.log('✅ Setting face embedding in state');
+                        setVerificationState(prev => ({
+                          ...prev,
+                          faceEmbedding: embedding
+                        }));
+                      }
+                    }}
+                    autoCapture={false}
+                    minFaceRelativeSize={0.20}
+                  />
+                </div>
+                
+                {verificationState.faceEmbedding ? (
+                  <p className="text-sm text-green-600 font-semibold mb-4">✅ Face captured! Click verify to continue.</p>
+                ) : (
+                  <p className="text-sm text-gray-500 mb-4">📸 Click "Capture Face" button below to take photo</p>
+                )}
+                
+                {/* Debug info */}
+                <div className="text-xs text-gray-400 mb-2">
+                  Debug: Embedding {verificationState.faceEmbedding ? `captured (${verificationState.faceEmbedding.length} values)` : 'not yet captured'}
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      console.log('🔘 Verify button clicked. Has embedding:', !!verificationState.faceEmbedding);
+                      if (verificationState.faceEmbedding) {
+                        handleFaceVerification(verificationState.faceEmbedding);
+                      } else {
+                        console.warn('⚠️ No face embedding available');
+                      }
+                    }}
+                    disabled={!verificationState.faceEmbedding}
+                    className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    ✅ Verify Face
+                  </button>
+                  <button
+                    onClick={() => setVerificationState({ 
+                      ...verificationState, 
+                      method: null, 
+                      scanning: false, 
+                      faceEmbedding: null,
+                      error: null 
+                    })}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Face ID Verification in Progress (processing after capture)
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4">👤</div>
+                <p className="text-gray-600 mb-2">Verifying face...</p>
+                <div className="flex justify-center">
+                  <Loader2 className="w-8 h-8 text-black animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  // Helper function for face verification
+  async function handleFaceVerification(embedding) {
+    try {
+      // Stop scanning
+      setVerificationState(prev => ({ ...prev, scanning: false }));
+      
+      const sessionId = localStorage.getItem('sessionId');
+      const res = await fetch('/api/auth/verify-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          embedding
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.valid) {
+        // Face verification success
+        await handleVerificationSuccess();
+      } else {
+        // Face verification failed
+        let errorMessage = data.error || 'Face verification failed.';
+        if (data.similarity !== undefined && data.cosTh !== undefined) {
+          errorMessage += `\n\nSimilarity: ${(data.similarity * 100).toFixed(1)}% (Required: ${(data.cosTh * 100).toFixed(0)}%)`;
+        }
+        
+        setVerificationState({
+          ...verificationState,
+          method: null,
+          scanning: false,
+          error: errorMessage
+        });
+      }
+    } catch (error) {
+      console.error('Face verification error:', error);
+      setVerificationState({
+        ...verificationState,
+        method: null,
+        scanning: false,
+        error: 'Face verification failed. Please try again or use password.'
+      });
+    }
+  }
+
+  // Helper function for password verification
+  async function handlePasswordVerification() {
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      const res = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          password: verificationState.password
+        })
+      });
+      
+      if (res.ok) {
+        await handleVerificationSuccess();
+      } else {
+        setVerificationState({
+          ...verificationState,
+          error: 'Incorrect password. Please try again.',
+          password: ''
+        });
+      }
+    } catch (error) {
+      setVerificationState({
+        ...verificationState,
+        error: 'Verification failed. Please try again.',
+        password: ''
+      });
+    }
+  }
+
+  // Helper function to execute transfer after successful verification
+  async function handleVerificationSuccess() {
+    setVerificationState({ active: false, method: null, password: '', error: null });
+    
+    // Hide all confirmation buttons
+    setMessages(prev => prev.map(msg => ({
+      ...msg,
+      showConfirmButtons: false
+    })));
+    
+    // Add user confirmation message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: 'confirm',
+      timestamp: new Date()
+    }]);
+    
+    setLoading(true);
+    
+    // Process the transfer
+    const response = await processCommand('confirm');
+    
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: response.content,
+      type: response.type,
+      showConfirmButtons: false,
+      timestamp: new Date()
+    }]);
+    
+    setLoading(false);
+  }
 }
