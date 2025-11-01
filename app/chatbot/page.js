@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Loader2, CreditCard, ArrowRightLeft, Wallet } from 'lucide-react';
 import Navigation from '@/components/Navigation';
+import dynamic from 'next/dynamic';
+
+const Camera = dynamic(() => import('@/components/Camera'), { ssr: false });
 
 export default function BankingChatbot() {
   const [messages, setMessages] = useState([]);
@@ -13,11 +16,19 @@ export default function BankingChatbot() {
   const [currentCard, setCurrentCard] = useState(null);
   const [transferState, setTransferState] = useState({
     active: false,
-    step: null, // 'amount', 'card', 'confirm'
+    step: null, // 'amount', 'card', 'confirm', 'verify'
     amount: null,
     recipientCard: null,
     recipientName: null,
     bank: null
+  });
+  const [verificationState, setVerificationState] = useState({
+    active: false,
+    method: null, // 'password' or 'faceid'
+    password: '',
+    error: null,
+    faceEmbedding: null,
+    scanning: false
   });
   const [dashboardRedirect, setDashboardRedirect] = useState({
     pending: false,
@@ -76,13 +87,15 @@ export default function BankingChatbot() {
 
   // Get user session
   const checkSession = async () => {
-    if (!isClient) return;
+    // Remove the isClient check here since we call it after setIsClient(true)
     
     try {
       // Try to get sessionId from localStorage
       const sessionId = localStorage.getItem('sessionId');
+      console.log('🔍 Checking session. sessionId from localStorage:', sessionId);
       
       if (!sessionId) {
+        console.log('❌ No sessionId found in localStorage. User needs to log in.');
         setMessages([{
           role: 'assistant',
           content: '👋 Welcome! I\'m your friendly banking assistant.\n\n🔐 To get started, please log in to access your cards and make transfers. I\'m here to help you manage your finances safely and easily!',
@@ -91,13 +104,17 @@ export default function BankingChatbot() {
         return;
       }
 
+      console.log('📡 Verifying session with API...');
       const res = await fetch('/api/auth/verify-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId })
       });
 
+      console.log('📡 Session verification status:', res.status, res.ok);
+
       if (!res.ok) {
+        console.log('❌ Session verification failed with status:', res.status);
         setMessages([{
           role: 'assistant',
           content: '⏰ Hi there! It looks like your session has expired for security reasons.\n\nPlease log in again, and I\'ll be right here to assist you with your banking needs!',
@@ -107,10 +124,13 @@ export default function BankingChatbot() {
       }
 
       const data = await res.json();
+      console.log('✅ Session verification response:', data);
       if (data.valid && data.session?.userId) {
+        console.log('✅ Setting userId to:', data.session.userId);
         setUserId(data.session.userId);
         await loadUserCards(data.session.userId);
       } else {
+        console.log('❌ Session invalid or no userId:', data);
         setMessages([{
           role: 'assistant',
           content: '👋 Hello! I\'m here to help you with your banking needs.\n\n🔐 Please log in first so I can assist you with transfers, balance checks, and more!',
@@ -129,11 +149,18 @@ export default function BankingChatbot() {
 
   const loadUserCards = async (uid) => {
     try {
-      const res = await fetch(`/api/cards/list?userId=${uid}`);
+      console.log('🔄 loadUserCards called with userId:', uid);
+      const apiUrl = `/api/cards/list?userId=${uid}`;
+      console.log('🔄 Fetching from:', apiUrl);
+      
+      const res = await fetch(apiUrl);
+      console.log('🔄 API Response status:', res.status, res.ok);
+      
       const data = await res.json();
       console.log('🔍 API Response:', data);
       console.log('🔍 Loaded cards from API:', data.cards?.length, 'cards');
-      if (data.ok && data.cards.length > 0) {
+      
+      if (data.ok && data.cards && data.cards.length > 0) {
         setUserCards(data.cards);
         console.log('✅ Updated userCards state with', data.cards.length, 'cards');
         console.log('✅ Full userCards data:', data.cards);
@@ -178,6 +205,11 @@ export default function BankingChatbot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Monitor userId state changes
+  useEffect(() => {
+    console.log('👤 userId state changed to:', userId);
+  }, [userId]);
 
   // Monitor userCards state changes
   useEffect(() => {
@@ -243,6 +275,8 @@ export default function BankingChatbot() {
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.content
       }));
+
+      console.log('📤 Sending to chatbot API:', { userId, currentCard: currentCard?.name, userCardsCount: userCards.length });
 
       const aiResponse = await fetch('/api/chatbot/chat', {
         method: 'POST',
@@ -1351,6 +1385,39 @@ export default function BankingChatbot() {
           </div>
         )}
 
+        {/* Debug Info & Actions */}
+        {!currentCard && (
+          <div className="p-6 border-b border-gray-200 bg-white">
+            <p className="text-xs text-black mb-2">Debug Info:</p>
+            <p className="text-xs text-black mb-3 font-mono bg-gray-50 px-2 py-1 rounded">
+              userId: {userId || 'null'}<br/>
+              cards: {userCards.length}
+            </p>
+            
+            <button
+              onClick={async () => {
+                console.log('🔄 Force refresh session and cards...');
+                await checkSession();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all border-2 border-gray-200 font-semibold text-sm mb-2"
+            >
+              🔄 Refresh Session
+            </button>
+            
+            {userId && (
+              <button
+                onClick={async () => {
+                  console.log('🔄 Manually reloading cards for userId:', userId);
+                  await loadUserCards(userId);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-50 transition-all border-2 border-gray-200 font-semibold text-sm"
+              >
+                � Reload Cards ({userCards.length})
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Spacer to push Clear Chat button to bottom */}
         <div className="flex-1"></div>
 
@@ -1449,34 +1516,14 @@ export default function BankingChatbot() {
                   {message.showConfirmButtons && message.type === 'confirm' && (
                     <div className="flex gap-2 mt-4">
                       <button
-                        onClick={async () => {
-                          // Hide all confirmation buttons first
-                          setMessages(prev => prev.map(msg => ({
-                            ...msg,
-                            showConfirmButtons: false
-                          })));
-                          
-                          // Add user message
-                          setMessages(prev => [...prev, {
-                            role: 'user',
-                            content: 'confirm',
-                            timestamp: new Date()
-                          }]);
-                          
-                          setLoading(true);
-                          
-                          // Process the confirmation
-                          const response = await processCommand('confirm');
-                          
-                          setMessages(prev => [...prev, {
-                            role: 'assistant',
-                            content: response.content,
-                            type: response.type,
-                            showConfirmButtons: false,
-                            timestamp: new Date()
-                          }]);
-                          
-                          setLoading(false);
+                        onClick={() => {
+                          // Show verification modal instead of executing transfer
+                          setVerificationState({
+                            active: true,
+                            method: null,
+                            password: '',
+                            error: null
+                          });
                         }}
                         className="flex-1 bg-white hover:bg-gray-50 text-black font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl border border-gray-200"
                       >
@@ -1814,6 +1861,297 @@ export default function BankingChatbot() {
       </div>
       </div>
       </div>
+
+      {/* Verification Modal */}
+      {verificationState.active && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setVerificationState({ 
+          active: false, 
+          method: null, 
+          password: '', 
+          error: null,
+          faceEmbedding: null,
+          scanning: false
+        })}>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold text-black mb-2">🔒 Verify Transfer</h2>
+            <p className="text-gray-600 mb-6 text-sm">Choose your verification method to complete this transfer securely</p>
+            
+            {!verificationState.method ? (
+              // Method Selection
+              <div className="space-y-3">
+                <button
+                  onClick={() => setVerificationState({ ...verificationState, method: 'password' })}
+                  className="w-full bg-white hover:bg-gray-50 text-black font-semibold py-4 px-6 rounded-xl border-2 border-gray-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
+                >
+                  <span className="text-2xl">🔑</span>
+                  <span>Verify with Password</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setVerificationState({ 
+                      ...verificationState, 
+                      method: 'faceid',
+                      scanning: true,
+                      error: null
+                    });
+                  }}
+                  className="w-full bg-white hover:bg-gray-50 text-black font-semibold py-4 px-6 rounded-xl border-2 border-gray-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
+                >
+                  <span className="text-2xl">👤</span>
+                  <span>Verify with Face ID</span>
+                </button>
+                
+                {verificationState.error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {verificationState.error}
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setVerificationState({ 
+                    active: false, 
+                    method: null, 
+                    password: '', 
+                    error: null,
+                    faceEmbedding: null,
+                    scanning: false
+                  })}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : verificationState.method === 'password' ? (
+              // Password Input
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Enter Password</label>
+                  <input
+                    type="password"
+                    value={verificationState.password}
+                    onChange={(e) => setVerificationState({ ...verificationState, password: e.target.value })}
+                    placeholder="Enter your login password"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent text-black"
+                    autoFocus
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && verificationState.password) {
+                        handlePasswordVerification();
+                      }
+                    }}
+                  />
+                </div>
+                
+                {verificationState.error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {verificationState.error}
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={handlePasswordVerification}
+                    disabled={!verificationState.password}
+                    className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Verify
+                  </button>
+                  <button
+                    onClick={() => setVerificationState({ ...verificationState, method: null, password: '', error: null })}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : verificationState.scanning ? (
+              // Face ID Verification - Camera View
+              <div className="text-center py-4">
+                <div className="text-4xl mb-3">👤</div>
+                <p className="text-gray-600 mb-4 font-semibold">Position your face in the camera</p>
+                
+                {/* Camera Component */}
+                <div className="relative rounded-xl overflow-hidden border-2 border-gray-200 mb-4">
+                  <Camera 
+                    onEmbedding={(embedding) => {
+                      console.log('🎥 Face embedding received:', embedding ? 'YES' : 'NO', embedding?.length);
+                      // Store embedding from manual capture
+                      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
+                        console.log('✅ Setting face embedding in state');
+                        setVerificationState(prev => ({
+                          ...prev,
+                          faceEmbedding: embedding
+                        }));
+                      }
+                    }}
+                    autoCapture={false}
+                    minFaceRelativeSize={0.20}
+                  />
+                </div>
+                
+                {verificationState.faceEmbedding ? (
+                  <p className="text-sm text-green-600 font-semibold mb-4">✅ Face captured! Click verify to continue.</p>
+                ) : (
+                  <p className="text-sm text-gray-500 mb-4">📸 Click "Capture Face" button below to take photo</p>
+                )}
+                
+                {/* Debug info */}
+                <div className="text-xs text-gray-400 mb-2">
+                  Debug: Embedding {verificationState.faceEmbedding ? `captured (${verificationState.faceEmbedding.length} values)` : 'not yet captured'}
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      console.log('🔘 Verify button clicked. Has embedding:', !!verificationState.faceEmbedding);
+                      if (verificationState.faceEmbedding) {
+                        handleFaceVerification(verificationState.faceEmbedding);
+                      } else {
+                        console.warn('⚠️ No face embedding available');
+                      }
+                    }}
+                    disabled={!verificationState.faceEmbedding}
+                    className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    ✅ Verify Face
+                  </button>
+                  <button
+                    onClick={() => setVerificationState({ 
+                      ...verificationState, 
+                      method: null, 
+                      scanning: false, 
+                      faceEmbedding: null,
+                      error: null 
+                    })}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Face ID Verification in Progress (processing after capture)
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4">👤</div>
+                <p className="text-gray-600 mb-2">Verifying face...</p>
+                <div className="flex justify-center">
+                  <Loader2 className="w-8 h-8 text-black animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  // Helper function for face verification
+  async function handleFaceVerification(embedding) {
+    try {
+      // Stop scanning
+      setVerificationState(prev => ({ ...prev, scanning: false }));
+      
+      const sessionId = localStorage.getItem('sessionId');
+      const res = await fetch('/api/auth/verify-face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          embedding
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.valid) {
+        // Face verification success
+        await handleVerificationSuccess();
+      } else {
+        // Face verification failed
+        let errorMessage = data.error || 'Face verification failed.';
+        if (data.similarity !== undefined && data.cosTh !== undefined) {
+          errorMessage += `\n\nSimilarity: ${(data.similarity * 100).toFixed(1)}% (Required: ${(data.cosTh * 100).toFixed(0)}%)`;
+        }
+        
+        setVerificationState({
+          ...verificationState,
+          method: null,
+          scanning: false,
+          error: errorMessage
+        });
+      }
+    } catch (error) {
+      console.error('Face verification error:', error);
+      setVerificationState({
+        ...verificationState,
+        method: null,
+        scanning: false,
+        error: 'Face verification failed. Please try again or use password.'
+      });
+    }
+  }
+
+  // Helper function for password verification
+  async function handlePasswordVerification() {
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      const res = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          password: verificationState.password
+        })
+      });
+      
+      if (res.ok) {
+        await handleVerificationSuccess();
+      } else {
+        setVerificationState({
+          ...verificationState,
+          error: 'Incorrect password. Please try again.',
+          password: ''
+        });
+      }
+    } catch (error) {
+      setVerificationState({
+        ...verificationState,
+        error: 'Verification failed. Please try again.',
+        password: ''
+      });
+    }
+  }
+
+  // Helper function to execute transfer after successful verification
+  async function handleVerificationSuccess() {
+    setVerificationState({ active: false, method: null, password: '', error: null });
+    
+    // Hide all confirmation buttons
+    setMessages(prev => prev.map(msg => ({
+      ...msg,
+      showConfirmButtons: false
+    })));
+    
+    // Add user confirmation message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: 'confirm',
+      timestamp: new Date()
+    }]);
+    
+    setLoading(true);
+    
+    // Process the transfer
+    const response = await processCommand('confirm');
+    
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: response.content,
+      type: response.type,
+      showConfirmButtons: false,
+      timestamp: new Date()
+    }]);
+    
+    setLoading(false);
+  }
 }
