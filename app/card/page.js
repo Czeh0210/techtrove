@@ -15,6 +15,7 @@ export default function CardPage() {
   const [userInfo, setUserInfo] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [cardsLoading, setCardsLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCard, setSelectedCard] = useState(null);
   const [showCardOptions, setShowCardOptions] = useState(false);
@@ -26,6 +27,7 @@ export default function CardPage() {
   const [verificationMessage, setVerificationMessage] = useState(""); // Error message to display
   const [currentCardIndex, setCurrentCardIndex] = useState(0); // Current card in carousel
   const [dragDirection, setDragDirection] = useState(null);
+  const [modelsLoaded, setModelsLoaded] = useState(false); // Track if face-api models are loaded
 
   // Card stack animation values
   const dragY = useMotionValue(0);
@@ -90,6 +92,7 @@ export default function CardPage() {
   // Load user's cards from MongoDB
   const loadUserCards = async (userId) => {
     try {
+      setCardsLoading(true);
       const res = await fetch(`/api/cards/list?userId=${userId}`);
       const data = await res.json();
       
@@ -98,6 +101,8 @@ export default function CardPage() {
       }
     } catch (error) {
       console.error("Error loading cards:", error);
+    } finally {
+      setCardsLoading(false);
     }
   };
 
@@ -222,24 +227,28 @@ export default function CardPage() {
     }
   };
 
-  // Initialize face-api models
+  // Initialize face-api models (LAZY LOAD - only when needed)
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  useEffect(() => {
-    const loadModels = async () => {
-      const MODEL_URL = "/models";
-      try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        console.log("Face detection models loaded");
-      } catch (err) {
-        console.error("Error loading face-api models:", err);
-      }
-    };
-    loadModels();
-  }, []);
+  const loadModels = async () => {
+    if (modelsLoaded) return; // Already loaded
+    
+    const MODEL_URL = "/models";
+    try {
+      console.log("Loading face detection models...");
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+      ]);
+      setModelsLoaded(true);
+      console.log("Face detection models loaded successfully");
+    } catch (err) {
+      console.error("Error loading face-api models:", err);
+      throw err;
+    }
+  };
 
   // Handle face verification
   const handleFaceVerification = async () => {
@@ -247,6 +256,12 @@ export default function CardPage() {
     setShowFaceVerification(true);
     
     try {
+      // Load models only when face verification is needed
+      if (!modelsLoaded) {
+        console.log("Loading face models (first time)...");
+        await loadModels();
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { width: 640, height: 480 } 
       });
@@ -555,6 +570,26 @@ export default function CardPage() {
                 {loading ? "Creating..." : "Submit"}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* Loading Skeleton for Cards */}
+        {cardsLoading && (
+          <div className="w-full">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Loading your cards...</h2>
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-white/50 rounded-2xl p-8 animate-pulse">
+                  <div className="h-6 bg-gray-300 rounded w-1/3 mb-6"></div>
+                  <div className="h-8 bg-gray-300 rounded w-3/4 mb-6"></div>
+                  <div className="flex justify-between mb-6">
+                    <div className="h-6 bg-gray-300 rounded w-1/4"></div>
+                    <div className="h-6 bg-gray-300 rounded w-1/5"></div>
+                  </div>
+                  <div className="h-4 bg-gray-300 rounded w-1/6"></div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

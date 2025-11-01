@@ -47,8 +47,8 @@ export async function POST(request) {
       cvv,
       expiryDate,
       createdDate,
-      balance,
-      currency,
+      balance: balance || 1000, // Initial balance RM1000
+      currency: currency || "MYR",
       userId,
       sessionId,
       createdAt: new Date(),
