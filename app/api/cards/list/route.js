@@ -27,6 +27,8 @@ export async function GET(request) {
         cvv: card.cvv,
         expiryDate: card.expiryDate,
         createdDate: card.createdDate,
+        balance: card.balance || 1000, // Default to RM1000 for existing cards
+        currency: card.currency || "MYR",
       }))
     });
   } catch (error) {

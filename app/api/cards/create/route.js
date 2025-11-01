@@ -44,6 +44,8 @@ export async function POST(request) {
       createdDate,
       userId,
       sessionId,
+      balance: 1000, // Initial balance RM1000
+      currency: "MYR",
       createdAt: new Date(),
     };
 
@@ -58,6 +60,8 @@ export async function POST(request) {
         cvv: cardDoc.cvv,
         expiryDate: cardDoc.expiryDate,
         createdDate: cardDoc.createdDate,
+        balance: cardDoc.balance,
+        currency: cardDoc.currency,
       }
     }, { status: 201 });
   } catch (error) {
