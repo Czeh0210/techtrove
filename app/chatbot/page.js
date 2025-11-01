@@ -265,6 +265,9 @@ export default function BankingChatbot() {
             case 'history':
               return await handleTransactionHistory();
               
+            case 'download_statement':
+              return await handleDownloadStatement(data.action.period);
+              
             case 'transfer':
               // Only execute if we have COMPLETE information (bank, accountNumber, and amount)
               if (data.action.bank && data.action.accountNumber && data.action.amount) {
@@ -712,6 +715,357 @@ export default function BankingChatbot() {
       type: 'dashboard_confirm',
       showConfirmButtons: true
     };
+  };
+
+  const handleDownloadStatement = async (period) => {
+    if (!userId) {
+      return { 
+        content: 'Please log in to download your statement.',
+        type: 'error' 
+      };
+    }
+
+    if (!period || !['day', 'week', 'month', '6months'].includes(period)) {
+      return {
+        content: 'Please specify a valid time period: today, this week, this month, or last 6 months.',
+        type: 'error'
+      };
+    }
+
+    try {
+      // Fetch user's cards and transactions
+      const [cardsRes, transactionsRes] = await Promise.all([
+        fetch(`/api/cards/list?userId=${userId}`),
+        fetch(`/api/cards/transaction-history?userId=${userId}&limit=1000`)
+      ]);
+
+      const cardsData = await cardsRes.json();
+      const transactionsData = await transactionsRes.json();
+
+      if (!cardsData.ok || !transactionsData.ok) {
+        return {
+          content: 'Failed to fetch your data. Please try again!',
+          type: 'error'
+        };
+      }
+
+      const cards = cardsData.cards || [];
+      const allTransactions = transactionsData.transactions || [];
+
+      // Filter transactions by period
+      const now = new Date();
+      const filteredTransactions = allTransactions.filter(tx => {
+        const txDate = new Date(tx.timestamp);
+        switch(period) {
+          case 'day':
+            return txDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return txDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return txDate >= monthAgo;
+          case '6months':
+            const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+            return txDate >= sixMonthsAgo;
+          default:
+            return true;
+        }
+      });
+
+      // Calculate cash flow
+      let cashIn = 0;
+      let cashOut = 0;
+      filteredTransactions.forEach(tx => {
+        if (tx.recipientUserId === userId) {
+          cashIn += tx.amount;
+        }
+        if (tx.senderUserId === userId) {
+          cashOut += tx.amount;
+        }
+      });
+
+      // Generate PDF content
+      const periodLabel = period === 'day' ? 'Today' : 
+                         period === 'week' ? 'Last 7 Days' : 
+                         period === 'month' ? 'Last 30 Days' : 'Last 6 Months';
+
+      const totalBalance = cards.reduce((sum, card) => sum + (card.balance || 0), 0);
+
+      const pdfContent = generatePDFContent({
+        periodLabel,
+        cards,
+        transactions: filteredTransactions,
+        cashIn,
+        cashOut,
+        totalBalance,
+        userId,
+        accountInfo: `Total Cards: ${cards.length}`
+      });
+
+      // Open PDF in new window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(pdfContent);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+
+        return {
+          content: `✅ Statement Generated!\n\n📄 Period: ${periodLabel}\n💰 Total Balance: RM${totalBalance.toFixed(2)}\n📊 Transactions: ${filteredTransactions.length}\n💵 Cash In: RM${cashIn.toFixed(2)}\n💸 Cash Out: RM${cashOut.toFixed(2)}\n\nYour PDF statement has been opened in a new window. You can save it or print it! 😊`,
+          type: 'success'
+        };
+      } else {
+        return {
+          content: 'Please allow pop-ups to download your statement!',
+          type: 'error'
+        };
+      }
+    } catch (error) {
+      console.error('Download statement error:', error);
+      return {
+        content: 'Failed to generate statement. Please try again!',
+        type: 'error'
+      };
+    }
+  };
+
+  const generatePDFContent = ({ periodLabel, cards, transactions, cashIn, cashOut, totalBalance, userId, accountInfo }) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Transaction Statement - ${periodLabel}</title>
+  <style>
+    @page { 
+      size: A4;
+      margin: 20mm;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #1f2937;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 3px solid #7c3aed;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #7c3aed;
+      margin: 0 0 5px 0;
+      font-size: 28px;
+    }
+    .header p {
+      color: #6b7280;
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    .info-section {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border-left: 4px solid #7c3aed;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #374151;
+    }
+    .info-value {
+      color: #6b7280;
+    }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    .summary-card {
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .summary-card.cash-in {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+    }
+    .summary-card.cash-out {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+    }
+    .summary-card.net {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+    }
+    .summary-card h3 {
+      margin: 0 0 5px 0;
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    .summary-card p {
+      margin: 0;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .transactions-header {
+      background: #7c3aed;
+      color: white;
+      padding: 12px 15px;
+      border-radius: 8px 8px 0 0;
+      font-weight: 600;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    .transaction-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .transaction-table th {
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .transaction-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 12px;
+    }
+    .transaction-table tr:hover {
+      background: #f9fafb;
+    }
+    .amount-in {
+      color: #10b981;
+      font-weight: 600;
+    }
+    .amount-out {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 11px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 15px;
+    }
+    .no-transactions {
+      text-align: center;
+      padding: 40px;
+      color: #9ca3af;
+      font-style: italic;
+    }
+    @media print {
+      body { margin: 0; }
+      .transaction-table { page-break-inside: auto; }
+      .transaction-table tr { page-break-inside: avoid; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🏦 TechTrove Banking</h1>
+    <p>Transaction Statement</p>
+  </div>
+
+  <div class="info-section">
+    <div class="info-row">
+      <span class="info-label">Statement Period:</span>
+      <span class="info-value">${periodLabel}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Account:</span>
+      <span class="info-value">All Cards</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">${accountInfo.split(':')[0]}:</span>
+      <span class="info-value">${accountInfo.split(':')[1] || cards.length}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Generated:</span>
+      <span class="info-value">${new Date().toLocaleString()}</span>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card cash-in">
+      <h3>Cash In</h3>
+      <p>RM${cashIn.toFixed(2)}</p>
+    </div>
+    <div class="summary-card cash-out">
+      <h3>Cash Out</h3>
+      <p>RM${cashOut.toFixed(2)}</p>
+    </div>
+    <div class="summary-card net">
+      <h3>Net Flow</h3>
+      <p>RM${(cashIn - cashOut).toFixed(2)}</p>
+    </div>
+  </div>
+
+  <div class="transactions-header">
+    Transaction History (${transactions.length} transactions)
+  </div>
+  
+  ${transactions.length > 0 ? `
+    <table class="transaction-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>From</th>
+          <th>To</th>
+          <th style="text-align: right;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${transactions.map(tx => {
+          const isIncoming = tx.recipientUserId === userId;
+          const date = new Date(tx.timestamp);
+          return `
+            <tr>
+              <td>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</td>
+              <td>${isIncoming ? '📥 Received' : '📤 Sent'}</td>
+              <td>${tx.senderName || 'N/A'}</td>
+              <td>${tx.recipientName || 'N/A'}</td>
+              <td style="text-align: right;" class="${isIncoming ? 'amount-in' : 'amount-out'}">
+                ${isIncoming ? '+' : '-'}RM${tx.amount.toFixed(2)}
+              </td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  ` : `
+    <div class="no-transactions">
+      No transactions found for the selected period.
+    </div>
+  `}
+
+  <div class="footer">
+    <p>This is a computer-generated statement and does not require a signature.</p>
+    <p>TechTrove Banking © ${new Date().getFullYear()} • Confidential Document</p>
+  </div>
+</body>
+</html>
+    `;
   };
 
   const parseTransferCommand = (input) => {
@@ -1276,6 +1630,34 @@ export default function BankingChatbot() {
                 className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
               >
                 📜 History
+              </button>
+              <button
+                onClick={async () => {
+                  if (!currentCard || loading) return;
+                  
+                  setMessages(prev => [...prev, {
+                    role: 'user',
+                    content: 'download statement',
+                    timestamp: new Date()
+                  }]);
+                  
+                  setLoading(true);
+                  const response = await processCommand('download statement');
+                  
+                  setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: response.content,
+                    type: response.type,
+                    showConfirmButtons: response.showConfirmButtons || false,
+                    timestamp: new Date()
+                  }]);
+                  
+                  setLoading(false);
+                }}
+                disabled={!currentCard || loading}
+                className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition-all disabled:opacity-50"
+              >
+                📄 Download
               </button>
               <button
                 onClick={async () => {
