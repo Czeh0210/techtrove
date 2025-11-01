@@ -4,6 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import { ArrowUpRight, ArrowDownLeft, DollarSign, TrendingUp, TrendingDown, Calendar, Download } from "lucide-react";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from "@/components/ui/chart";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -165,6 +173,74 @@ export default function DashboardPage() {
       case '6months': return 'Last 6 Months';
       default: return 'All Time';
     }
+  };
+
+  const prepareChartData = () => {
+    // Group transactions by date
+    const dataMap = new Map();
+    
+    transactions.forEach(tx => {
+      if (selectedCard !== 'all' && 
+          tx.senderCardNumber !== selectedCard && 
+          tx.recipientCardNumber !== selectedCard) {
+        return;
+      }
+      
+      const date = new Date(tx.timestamp);
+      let dateKey;
+      
+      // Format date based on time filter
+      if (timeFilter === 'day') {
+        dateKey = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      } else if (timeFilter === 'week') {
+        dateKey = date.toLocaleDateString('en-US', { weekday: 'short' });
+      } else {
+        dateKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      
+      if (!dataMap.has(dateKey)) {
+        dataMap.set(dateKey, { date: dateKey, cashIn: 0, cashOut: 0 });
+      }
+      
+      const entry = dataMap.get(dateKey);
+      
+      if (selectedCard !== 'all') {
+        if (tx.recipientCardNumber === selectedCard) {
+          entry.cashIn += tx.amount;
+        }
+        if (tx.senderCardNumber === selectedCard) {
+          entry.cashOut += tx.amount;
+        }
+      } else {
+        if (tx.recipientUserId === userId) {
+          entry.cashIn += tx.amount;
+        }
+        if (tx.senderUserId === userId) {
+          entry.cashOut += tx.amount;
+        }
+      }
+    });
+    
+    // Convert to array and sort by date
+    const chartData = Array.from(dataMap.values());
+    
+    // If no data, return empty array
+    if (chartData.length === 0) {
+      return [];
+    }
+    
+    return chartData;
+  };
+
+  const chartConfig = {
+    cashIn: {
+      label: "Cash In",
+      color: "#10b981", // emerald-500
+    },
+    cashOut: {
+      label: "Cash Out",
+      color: "#ef4444", // red-500
+    },
   };
 
   const renderPieChart = () => {
@@ -745,63 +821,181 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Pie Chart with Aurora Theme */}
+        {/* Cash Flow Trend Line Chart with Aurora Theme */}
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-indigo-200 p-8 mb-6 shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-purple-600 bg-clip-text text-transparent mb-8 text-center">
-            Cash Flow Distribution
-          </h2>
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-purple-600 bg-clip-text text-transparent mb-2 text-center">
+              Cash Flow Trend
+            </h2>
+            <p className="text-sm text-gray-600 text-center">
+              {getTimeFilterLabel()} • {selectedCard === 'all' ? 'All Cards' : cards.find(c => c.accountNumber === selectedCard)?.name || 'Selected Card'}
+            </p>
+          </div>
           
-          {renderPieChart()}
-
-          {/* Legend with Aurora Colors */}
-          <div className="flex flex-wrap justify-center gap-6 mt-8">
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-400/20">
-              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 animate-pulse"></div>
-              <span className="text-emerald-700 text-sm font-medium">Cash In: RM{(() => {
-                let cashIn = 0;
-                transactions.forEach(tx => {
-                  if (selectedCard !== 'all') {
-                    if (tx.recipientCardNumber === selectedCard) cashIn += tx.amount;
-                  } else {
-                    if (tx.recipientUserId === userId) cashIn += tx.amount;
-                  }
-                });
-                return cashIn.toFixed(2);
-              })()}</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 rounded-full border border-rose-400/20">
-              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-rose-400 to-pink-400 animate-pulse"></div>
-              <span className="text-rose-700 text-sm font-medium">Cash Out: RM{(() => {
-                let cashOut = 0;
-                transactions.forEach(tx => {
-                  if (selectedCard !== 'all') {
-                    if (tx.senderCardNumber === selectedCard) cashOut += tx.amount;
-                  } else {
-                    if (tx.senderUserId === userId) cashOut += tx.amount;
-                  }
-                });
-                return cashOut.toFixed(2);
-              })()}</span>
-            </div>
-            {(() => {
-              let cashIn = 0, cashOut = 0;
-              transactions.forEach(tx => {
-                if (selectedCard !== 'all') {
-                  if (tx.recipientCardNumber === selectedCard) cashIn += tx.amount;
-                  if (tx.senderCardNumber === selectedCard) cashOut += tx.amount;
-                } else {
-                  if (tx.recipientUserId === userId) cashIn += tx.amount;
-                  if (tx.senderUserId === userId) cashOut += tx.amount;
-                }
-              });
-              return (cashIn === 0 && cashOut === 0) && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 rounded-full border border-violet-400/20">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-400 to-purple-400 animate-pulse"></div>
-                  <span className="text-violet-600 text-sm font-medium">No Flow</span>
+          {(() => {
+            const chartData = prepareChartData();
+            
+            if (chartData.length === 0) {
+              return (
+                <div className="text-center py-20">
+                  <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full flex items-center justify-center">
+                    <TrendingUp className="w-10 h-10 text-purple-700" />
+                  </div>
+                  <p className="text-gray-600">No transaction data available for this period</p>
+                  <p className="text-sm text-gray-500 mt-2">Make some transactions to see your cash flow trend</p>
                 </div>
               );
-            })()}
-          </div>
+            }
+
+            const maxValue = Math.max(
+              ...chartData.map(d => Math.max(d.cashIn, d.cashOut)),
+              100
+            );
+
+            return (
+              <>
+                <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                  <LineChart
+                    data={chartData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorCashIn" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorCashOut" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid 
+                      strokeDasharray="3 3" 
+                      stroke="#e5e7eb" 
+                      vertical={false}
+                      opacity={0.5}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={12}
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      angle={timeFilter === 'day' ? -45 : 0}
+                      textAnchor={timeFilter === 'day' ? 'end' : 'middle'}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={12}
+                      tick={{ fill: '#6b7280', fontSize: 12 }}
+                      tickFormatter={(value) => `RM${value}`}
+                      domain={[0, maxValue * 1.1]}
+                    />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, name) => (
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">RM{Number(value).toFixed(2)}</span>
+                            </div>
+                          )}
+                        />
+                      }
+                      cursor={{ stroke: '#c084fc', strokeWidth: 1, strokeDasharray: '5 5' }}
+                    />
+                    <ChartLegend 
+                      content={<ChartLegendContent />}
+                      verticalAlign="top"
+                      height={36}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cashIn"
+                      stroke="var(--color-cashIn)"
+                      strokeWidth={3}
+                      dot={{
+                        fill: '#10b981',
+                        strokeWidth: 2,
+                        r: 5,
+                        stroke: '#fff',
+                      }}
+                      activeDot={{
+                        r: 7,
+                        fill: '#10b981',
+                        stroke: '#fff',
+                        strokeWidth: 2,
+                      }}
+                      animationDuration={1500}
+                      animationEasing="ease-in-out"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cashOut"
+                      stroke="var(--color-cashOut)"
+                      strokeWidth={3}
+                      dot={{
+                        fill: '#ef4444',
+                        strokeWidth: 2,
+                        r: 5,
+                        stroke: '#fff',
+                      }}
+                      activeDot={{
+                        r: 7,
+                        fill: '#ef4444',
+                        stroke: '#fff',
+                        strokeWidth: 2,
+                      }}
+                      animationDuration={1500}
+                      animationEasing="ease-in-out"
+                    />
+                  </LineChart>
+                </ChartContainer>
+
+                {/* Summary Stats */}
+                <div className="flex flex-wrap justify-center gap-6 mt-8 pt-6 border-t border-indigo-200">
+                  <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50/80 backdrop-blur-sm rounded-xl border border-emerald-200/50">
+                    <div className="p-2 bg-gradient-to-br from-emerald-100 to-cyan-100 rounded-lg">
+                      <ArrowDownLeft className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-emerald-600 font-medium">Total Cash In</p>
+                      <p className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent">
+                        RM{chartData.reduce((sum, d) => sum + d.cashIn, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 px-5 py-3 bg-rose-50/80 backdrop-blur-sm rounded-xl border border-rose-200/50">
+                    <div className="p-2 bg-gradient-to-br from-rose-100 to-pink-100 rounded-lg">
+                      <ArrowUpRight className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-rose-600 font-medium">Total Cash Out</p>
+                      <p className="text-xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
+                        RM{chartData.reduce((sum, d) => sum + d.cashOut, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 px-5 py-3 bg-indigo-50/80 backdrop-blur-sm rounded-xl border border-indigo-200/50">
+                    <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg">
+                      <TrendingUp className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-600 font-medium">Net Flow</p>
+                      <p className={`text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${
+                        chartData.reduce((sum, d) => sum + d.cashIn - d.cashOut, 0) >= 0
+                          ? 'from-indigo-600 to-purple-600'
+                          : 'from-orange-600 to-amber-600'
+                      }`}>
+                        {chartData.reduce((sum, d) => sum + d.cashIn - d.cashOut, 0) >= 0 ? '+' : ''}
+                        RM{chartData.reduce((sum, d) => sum + d.cashIn - d.cashOut, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Card Balances - Simple Grid */}
