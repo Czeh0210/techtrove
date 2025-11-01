@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = current month, 1 = last month, etc.
   const [typeFilter, setTypeFilter] = useState('all');
   
   // Statistics
@@ -43,10 +44,18 @@ export default function DashboardPage() {
   useEffect(() => {
     const savedToken = localStorage.getItem('authToken');
     const savedUserName = localStorage.getItem('userName');
+    const savedPeriod = localStorage.getItem('dashboardPeriod');
     
     if (savedToken) {
       setToken(savedToken);
       setUser({ username: savedUserName || 'User' });
+      
+      // If there's a saved period from chatbot redirect, use it
+      if (savedPeriod && ['day', 'week', 'month'].includes(savedPeriod)) {
+        setPeriod(savedPeriod);
+        // Clear it after using
+        localStorage.removeItem('dashboardPeriod');
+      }
     } else {
       // Redirect to chatbot for login
       router.push('/chatbot');
@@ -59,10 +68,16 @@ export default function DashboardPage() {
     
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/transactions?period=${period}`, {
+      // When period is 'month', fetch last 6 months of data
+      const fetchPeriod = period === 'month' ? 'year' : period;
+      const res = await fetch(`/api/transactions?period=${fetchPeriod}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
+      
+      console.log('📥 Fetched transactions for period:', fetchPeriod);
+      console.log('Transactions received:', data.transactions?.length || 0);
+      console.log('Balance:', data.balance);
       
       if (data.transactions) {
         setTransactions(data.transactions);
@@ -78,13 +93,26 @@ export default function DashboardPage() {
 
   // Calculate statistics
   const calculateStats = (txns) => {
-    const cashIn = txns
-      .filter(t => t.type === 'cash-in' || (t.type === 'transfer' && t.amount > 0))
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    console.log('📊 Calculating stats for transactions:', txns.length);
+    console.log('Transactions:', txns.map(t => ({ type: t.type, amount: t.amount, desc: t.description })));
     
-    const cashOut = txns
-      .filter(t => t.type === 'cash-out' || t.type === 'transaction' || t.type === 'payment' || (t.type === 'transfer' && t.amount < 0))
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const cashInTxns = txns.filter(t => 
+      t.type === 'cash-in' || 
+      t.type === 'transfer-in' || 
+      (t.type === 'transfer' && t.amount > 0)
+    );
+    const cashIn = cashInTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    console.log('💚 Cash In transactions:', cashInTxns.length, 'Total:', cashIn);
+    
+    const cashOutTxns = txns.filter(t => 
+      t.type === 'cash-out' || 
+      t.type === 'transaction' || 
+      t.type === 'payment' || 
+      t.type === 'transfer-out' ||
+      (t.type === 'transfer' && t.amount < 0)
+    );
+    const cashOut = cashOutTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    console.log('🔴 Cash Out transactions:', cashOutTxns.length, 'Total:', cashOut);
     
     setStats({
       totalCashIn: cashIn,
@@ -94,20 +122,42 @@ export default function DashboardPage() {
     });
   };
 
-  // Filter transactions
+  // Filter transactions and recalculate stats based on filter
   useEffect(() => {
-    if (typeFilter === 'all') {
-      setFilteredTransactions(transactions);
-    } else if (typeFilter === 'cash-in') {
-      setFilteredTransactions(transactions.filter(t => 
-        t.type === 'cash-in' || (t.type === 'transfer' && t.amount > 0)
-      ));
-    } else if (typeFilter === 'cash-out') {
-      setFilteredTransactions(transactions.filter(t => 
-        t.type === 'cash-out' || t.type === 'transaction' || t.type === 'payment' || (t.type === 'transfer' && t.amount < 0)
-      ));
+    let filtered = transactions;
+    
+    // Filter by specific month if period is 'month'
+    if (period === 'month' && selectedMonth >= 0) {
+      const now = new Date();
+      const targetMonth = new Date(now.getFullYear(), now.getMonth() - selectedMonth, 1);
+      const startOfMonth = targetMonth.getTime();
+      const endOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0, 23, 59, 59).getTime();
+      
+      filtered = filtered.filter(t => t.timestamp >= startOfMonth && t.timestamp <= endOfMonth);
     }
-  }, [transactions, typeFilter]);
+    
+    // Filter by transaction type
+    if (typeFilter === 'cash-in') {
+      filtered = filtered.filter(t => 
+        t.type === 'cash-in' || 
+        t.type === 'transfer-in' || 
+        (t.type === 'transfer' && t.amount > 0)
+      );
+    } else if (typeFilter === 'cash-out') {
+      filtered = filtered.filter(t => 
+        t.type === 'cash-out' || 
+        t.type === 'transaction' || 
+        t.type === 'payment' || 
+        t.type === 'transfer-out' ||
+        (t.type === 'transfer' && t.amount < 0)
+      );
+    }
+    
+    setFilteredTransactions(filtered);
+    
+    // Recalculate stats based on filtered transactions
+    calculateStats(filtered);
+  }, [transactions, typeFilter, period, selectedMonth]);
 
   // Fetch on mount and period change
   useEffect(() => {
@@ -127,21 +177,36 @@ export default function DashboardPage() {
     }));
   };
 
+  // Get month name for dropdown
+  const getMonthName = (monthsAgo) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsAgo);
+    return date.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });
+  };
+
+  // Get current viewing period text for display
+  const getCurrentPeriodText = () => {
+    if (period === 'day') return 'Today';
+    if (period === 'week') return 'This Week';
+    if (period === 'month') return getMonthName(selectedMonth);
+    return '';
+  };
+
   const formatCurrency = (amount) => {
     return `RM ${Math.abs(amount).toFixed(2)}`;
   };
 
   const getTypeColor = (type, amount) => {
-    if (type === 'cash-in' || (type === 'transfer' && amount > 0)) return 'text-green-600';
-    if (type === 'cash-out' || type === 'transaction' || type === 'payment' || (type === 'transfer' && amount < 0)) return 'text-red-600';
+    if (type === 'cash-in' || type === 'transfer-in' || (type === 'transfer' && amount > 0)) return 'text-green-600';
+    if (type === 'cash-out' || type === 'transaction' || type === 'payment' || type === 'transfer-out' || (type === 'transfer' && amount < 0)) return 'text-red-600';
     return 'text-gray-600';
   };
 
   const getTypeBadge = (type, amount) => {
-    if (type === 'cash-in' || (type === 'transfer' && amount > 0)) {
+    if (type === 'cash-in' || type === 'transfer-in' || (type === 'transfer' && amount > 0)) {
       return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Cash In</Badge>;
     }
-    if (type === 'cash-out' || type === 'transaction' || type === 'payment') {
+    if (type === 'cash-out' || type === 'transaction' || type === 'payment' || type === 'transfer-out') {
       return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Cash Out</Badge>;
     }
     if (type === 'transfer' && amount < 0) {
@@ -282,19 +347,32 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Balance Chart */}
+        {/* Balance Chart - Circular Progress */}
         <Card className="shadow-xl border-2 border-primary/10">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                Balance Over Time
+                Balance Overview
               </CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant={period === 'day' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setPeriod('day');
+                    setSelectedMonth(0);
+                  }}
+                >
+                  Day
+                </Button>
                 <Button
                   variant={period === 'week' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setPeriod('week')}
+                  onClick={() => {
+                    setPeriod('week');
+                    setSelectedMonth(0);
+                  }}
                 >
                   Week
                 </Button>
@@ -305,74 +383,150 @@ export default function DashboardPage() {
                 >
                   Month
                 </Button>
-                <Button
-                  variant={period === 'year' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPeriod('year')}
-                >
-                  Year
-                </Button>
-                <Button
-                  variant={period === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPeriod('all')}
-                >
-                  All
-                </Button>
+                
+                {/* Month selector dropdown - only show when Month is selected */}
+                {period === 'month' && (
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                    className="ml-2 px-3 py-1.5 text-sm border border-input bg-background rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value={0}>{getMonthName(0)}</option>
+                    <option value={1}>{getMonthName(1)}</option>
+                    <option value={2}>{getMonthName(2)}</option>
+                    <option value={3}>{getMonthName(3)}</option>
+                    <option value={4}>{getMonthName(4)}</option>
+                    <option value={5}>{getMonthName(5)}</option>
+                  </select>
+                )}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {chartData.length > 0 ? (
-              <div className="space-y-4">
-                {/* Simple Bar Chart */}
-                <div className="h-64 flex items-end justify-around gap-1 bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-lg p-4 border">
-                  {chartData.map((data, idx) => {
-                    const heightPercent = ((data.balance - minBalance) / balanceRange) * 100;
-                    const isPositive = data.amount >= 0;
-                    
-                    return (
-                      <div key={idx} className="flex flex-col items-center flex-1 max-w-[60px]">
-                        <div className="relative w-full h-48 flex flex-col justify-end">
-                          <div
-                            className={`w-full rounded-t-md transition-all hover:opacity-80 cursor-pointer ${
-                              isPositive 
-                                ? 'bg-gradient-to-t from-green-500 to-green-400' 
-                                : 'bg-gradient-to-t from-red-500 to-red-400'
-                            }`}
-                            style={{ height: `${Math.max(heightPercent, 5)}%` }}
-                            title={`${data.date}: RM ${data.balance.toFixed(2)}`}
-                          >
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-semibold whitespace-nowrap">
-                              {formatCurrency(data.balance)}
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-xs mt-2 text-center text-muted-foreground transform -rotate-45 origin-top-left">
-                          {data.date}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="flex flex-col items-center justify-center py-8">
+              {/* Debug Info - Remove after testing */}
+              <div className="text-xs text-muted-foreground mb-4 text-center">
+                Cash In: RM {stats.totalCashIn.toFixed(2)} | Cash Out: RM {stats.totalCashOut.toFixed(2)} | Total: RM {(stats.totalCashIn + stats.totalCashOut).toFixed(2)}
+              </div>
 
-                {/* Legend */}
-                <div className="flex justify-center gap-6 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-gradient-to-t from-green-500 to-green-400"></div>
-                    <span>Cash In</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-gradient-to-t from-red-500 to-red-400"></div>
-                    <span>Cash Out</span>
-                  </div>
+              {/* Main Balance Circle */}
+              <div className="relative w-80 h-80">
+                {/* Background Circle */}
+                <svg className="w-full h-full transform -rotate-90">
+                  {/* Background ring */}
+                  <circle
+                    cx="160"
+                    cy="160"
+                    r="140"
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth="24"
+                  />
+                  
+                  {stats.totalCashIn + stats.totalCashOut > 0 ? (
+                    <>
+                      {/* Cash In (Green) - Starting from 0 */}
+                      {stats.totalCashIn > 0 && (
+                        <circle
+                          cx="160"
+                          cy="160"
+                          r="140"
+                          fill="none"
+                          stroke="#22c55e"
+                          strokeWidth="24"
+                          strokeDasharray={`${(stats.totalCashIn / (stats.totalCashIn + stats.totalCashOut)) * 880} 880`}
+                          strokeDashoffset="0"
+                          className="transition-all duration-1000 ease-out"
+                          strokeLinecap="round"
+                        />
+                      )}
+                      
+                      {/* Cash Out (Red) - Following Cash In */}
+                      {stats.totalCashOut > 0 && (
+                        <circle
+                          cx="160"
+                          cy="160"
+                          r="140"
+                          fill="none"
+                          stroke="#ef4444"
+                          strokeWidth="24"
+                          strokeDasharray={`${(stats.totalCashOut / (stats.totalCashIn + stats.totalCashOut)) * 880} 880`}
+                          strokeDashoffset={`-${(stats.totalCashIn / (stats.totalCashIn + stats.totalCashOut)) * 880}`}
+                          className="transition-all duration-1000 ease-out"
+                          strokeLinecap="round"
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* No cash flow - Yellow circle */}
+                      <circle
+                        cx="160"
+                        cy="160"
+                        r="140"
+                        fill="none"
+                        stroke="#eab308"
+                        strokeWidth="24"
+                        strokeDasharray="880 880"
+                        strokeDashoffset="0"
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </>
+                  )}
+                </svg>
+                
+                {/* Center Content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <p className="text-sm text-muted-foreground mb-2">Total Balance</p>
+                  <p className="text-4xl font-bold text-primary">RM {balance.toFixed(2)}</p>
+                  {stats.totalCashIn + stats.totalCashOut > 0 ? (
+                    <>
+                      <p className={`text-lg font-semibold mt-2 ${stats.netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {stats.netChange >= 0 ? '+' : ''}RM {stats.netChange.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Net Change</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold mt-2 text-yellow-600">
+                        RM 0.00
+                      </p>
+                      <p className="text-xs text-yellow-600">No Cash Flow</p>
+                    </>
+                  )}
                 </div>
               </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                No transaction data available for this period
+
+              {/* Legend */}
+              <div className="flex gap-8 mt-8">
+                {stats.totalCashIn + stats.totalCashOut > 0 ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-green-500"></div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Cash In</p>
+                        <p className="text-lg font-bold text-green-600">RM {stats.totalCashIn.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-red-500"></div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Cash Out</p>
+                        <p className="text-lg font-bold text-red-600">RM {stats.totalCashOut.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-yellow-500"></div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">No Activity</p>
+                      <p className="text-lg font-bold text-yellow-600">RM 0.00</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
@@ -382,7 +536,12 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center flex-wrap gap-4">
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                Transaction History ({filteredTransactions.length})
+                <div className="flex flex-col">
+                  <span>Transaction History ({filteredTransactions.length})</span>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    Viewing: {getCurrentPeriodText()}
+                  </span>
+                </div>
               </CardTitle>
               <div className="flex gap-2 flex-wrap">
                 <Button

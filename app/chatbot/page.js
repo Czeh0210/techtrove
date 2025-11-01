@@ -126,6 +126,21 @@ export default function ChatbotPage() {
         setBalance(data.new_balance);
       }
       
+      // Handle redirect to dashboard for transaction history
+      if (data.redirect) {
+        console.log('🔄 Redirect available to:', data.redirect);
+        // Store the period filter in localStorage so dashboard can use it
+        if (data.period) {
+          localStorage.setItem('dashboardPeriod', data.period);
+        }
+        // Return the reply with redirect action attached
+        return { 
+          reply: data.reply || data.message || "Let me take you to the dashboard.",
+          redirect: data.redirect,
+          redirectLabel: "Go to Dashboard 📊"
+        };
+      }
+      
       // Handle statement download
       if (data.statement) {
         const statementType = data.statement.type || 'all';

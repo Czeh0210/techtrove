@@ -13,6 +13,11 @@ export async function GET(req) {
     const period = url.searchParams.get('period') || 'all';
     const list = await getTransactionsForUser(user.id, { period });
     const balance = await calculateBalance(user.id);
+    
+    console.log(`📋 GET /api/transactions - User: ${user.username}, Period: ${period}`);
+    console.log(`   Transactions found: ${list.length}`);
+    console.log(`   Transaction types:`, list.map(t => ({ type: t.type, amount: t.amount, desc: t.description?.substring(0, 30) })));
+    
     return NextResponse.json({ transactions: list, balance });
   } catch (err) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });

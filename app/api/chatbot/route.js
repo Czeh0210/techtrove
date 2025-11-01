@@ -26,7 +26,7 @@ ${transactions.map((t) => `- ${t.type}: RM ${t.amount.toFixed(2)} on ${new Date(
 
 You can ONLY help the user with banking functions:
 - Check their balance
-- Review transactions (this week, month, year) - Show as text in chat
+- View transaction history (redirects to dashboard)
 - Record transactions/payments (like buying coffee, groceries, bills, online shopping, etc.)
 - Transfer money to other users
 - Download statements (ONLY when user explicitly asks to "download" or "export")
@@ -44,6 +44,7 @@ Provide a comprehensive, friendly overview of all features with examples:
    • "Show me my recent transactions"
    • "What are my transactions this month?"
    • "Show transactions for this week"
+   Note: I'll redirect you to the dashboard to view detailed transaction history
 
 💸 **Transfer Money**
    • "Transfer RM 100 to demo2"
@@ -76,26 +77,10 @@ Users CANNOT deposit new money or withdraw cash - the system only manages existi
 
 VIEWING TRANSACTION HISTORY:
 When user asks to view/check/see their transaction history:
-- Use the get_transactions function to fetch their transactions
-- Display the transactions as formatted text in the chat
-- Show details: date, type, amount, description, balance after
-- Format nicely with bullet points or numbered list
-- ONLY call generate_statement function if user explicitly asks to "download" or "export" the statement
-
-For example, when user asks "show me my transactions":
-1. Call get_transactions with appropriate period
-2. Format and display the results in chat like:
-   "Here are your recent transactions:
-   
-   📅 January 15, 2025
-   • Transfer to demo2: -RM 500.00
-     Note: Lunch money
-     Balance: RM 1,500.00
-   
-   📅 January 14, 2025
-   • Coffee purchase: -RM 15.00
-     At: Starbucks
-     Balance: RM 2,000.00"
+- Use the get_transactions function
+- This will redirect the user to the dashboard where they can see detailed transaction history with filters and visualizations
+- Inform them you're taking them to the dashboard to view their transactions
+- Be friendly and let them know they'll see a comprehensive view with charts and filters
 
 IMPORTANT TRANSACTION FLOW:
 For Transactions/Payments (coffee, groceries, bills, online shopping, etc.):
@@ -178,7 +163,7 @@ Be concise, friendly, and accurate.`;
         type: 'function',
         function: {
           name: 'get_transactions',
-          description: 'Retrieve transaction history to display in chat (NOT for download). Use this when user wants to view/see/check their transactions.',
+          description: 'Redirect user to dashboard to view transaction history with detailed charts and filters. Use this when user wants to view/see/check their transactions.',
           parameters: {
             type: 'object',
             properties: {
@@ -298,28 +283,11 @@ Be concise, friendly, and accurate.`;
       console.log('🔧 Function call:', functionName, functionArgs);
 
       if (functionName === 'get_transactions') {
-        // Retrieve transactions to display in chat
-        const { period, type } = functionArgs;
-        const filterType = type || 'all';
-        console.log('📊 Fetching transactions for display:', period, 'type:', filterType);
+        // Redirect user to dashboard instead of showing transactions in chat
+        const { period } = functionArgs;
+        console.log('📊 Redirecting to dashboard for transaction history:', period);
 
-        const txList = await getTransactionsForUser(user.id, { period });
-        const filteredTxList = filterType === 'all' ? txList : txList.filter(t => t.type === filterType);
-
-        // Format transactions for display
-        const formattedTransactions = filteredTxList.map(tx => ({
-          date: new Date(tx.timestamp).toLocaleDateString('en-MY', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }),
-          type: tx.type,
-          amount: tx.amount,
-          description: tx.description,
-          balanceAfter: tx.balanceAfter
-        }));
-
-        // Send transactions back to ChatGPT for natural formatting
+        // Send redirect instruction back to ChatGPT for a natural response
         const followUpMessages = [
           ...messages,
           choice.message,
@@ -328,10 +296,9 @@ Be concise, friendly, and accurate.`;
             tool_call_id: toolCall.id,
             content: JSON.stringify({
               success: true,
-              count: filteredTxList.length,
+              redirect: true,
               period: period,
-              transactions: formattedTransactions,
-              message: `Found ${filteredTxList.length} transactions for the ${period}`
+              message: `Redirecting to dashboard to view ${period} transactions`
             })
           }
         ];
@@ -345,16 +312,16 @@ Be concise, friendly, and accurate.`;
           body: JSON.stringify({
             model: 'gpt-4o-mini',
             messages: followUpMessages,
-            max_tokens: 800,
+            max_tokens: 400,
             temperature: 0.7,
           }),
         });
 
         if (followUpRes.ok) {
           const followUpData = await followUpRes.json();
-          const reply = followUpData.choices?.[0]?.message?.content || 'Here are your transactions.';
-          console.log('✅ ChatGPT reply with transactions');
-          return NextResponse.json({ reply });
+          const reply = followUpData.choices?.[0]?.message?.content || 'Let me take you to the dashboard to view your transactions.';
+          console.log('✅ ChatGPT reply with redirect');
+          return NextResponse.json({ reply, redirect: '/dashboard', period });
         }
       } else if (functionName === 'process_transaction') {
         // Execute the transaction

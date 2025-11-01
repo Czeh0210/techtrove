@@ -73,7 +73,13 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
         
         // Add assistant response to chat
         if (response && response.reply) {
-          setMessages(prev => [...prev, { role: 'assistant', content: response.reply }]);
+          const newMessage = { 
+            role: 'assistant', 
+            content: response.reply,
+            redirect: response.redirect,
+            redirectLabel: response.redirectLabel
+          };
+          setMessages(prev => [...prev, newMessage]);
           // Trigger typing animation for the new message
           setMessages(prev => {
             setTypingMessageIndex(prev.length - 1);
@@ -130,6 +136,12 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
   };
 
   const handlePromptClickInternal = async (prompt) => {
+    // Special handling for View Transactions - redirect to dashboard
+    if (prompt === "View Transactions") {
+      window.location.href = '/dashboard';
+      return;
+    }
+    
     if (onPromptClick) {
       // Add user's badge click as a message
       setMessages(prev => [...prev, { role: 'user', content: prompt }]);
@@ -467,6 +479,15 @@ export function AIAssistantCard({ userName = "Robert", onPromptClick, onSendMess
                       <span className="inline-block w-1 h-4 bg-current ml-0.5 animate-pulse"></span>
                     )}
                   </p>
+                  {/* Show action button if message has redirect */}
+                  {msg.redirect && msg.redirectLabel && (
+                    <a 
+                      href={msg.redirect}
+                      className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all hover:scale-105 shadow-md text-sm font-medium"
+                    >
+                      {msg.redirectLabel}
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
