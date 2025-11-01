@@ -145,9 +145,20 @@ export default function AuthPage() {
         if (loginMethod === "face") incFaceAttempts();
         return;
       }
-      // success
+      // success - store session data
       resetFaceAttempts();
-      router.push("/dashboard");
+      
+      // Store session ID and user data in localStorage
+      if (data.sessionId) {
+        localStorage.setItem("sessionId", data.sessionId);
+        localStorage.setItem("userId", data.user.id);
+        localStorage.setItem("userName", data.user.name);
+        localStorage.setItem("userEmail", data.user.email);
+        localStorage.setItem("loginTime", data.loginTime);
+        console.log("Login successful. Session ID:", data.sessionId);
+      }
+      
+      router.push("/card");
     } catch (err) {
       setLoginError("Network error. Please try again.");
     } finally {
