@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 
 export const runtime = "nodejs";
+
+// Generate unique session ID
+function generateSessionId() {
+  return randomBytes(32).toString('hex');
+}
 
 function cosineSimilarity(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return -1;
@@ -55,7 +61,28 @@ export async function POST(request) {
       if (!isValid) {
         return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
       }
-      return NextResponse.json({ ok: true, user: { id: user._id, name: user.name, email: user.email } });
+      
+      // Generate unique session ID
+      const sessionId = generateSessionId();
+      const loginTime = new Date();
+      
+      // Store session in database
+      const sessions = db.collection("sessions");
+      await sessions.insertOne({
+        sessionId,
+        userId: user._id,
+        email: user.email,
+        loginMethod: "password",
+        loginTime,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      });
+      
+      return NextResponse.json({ 
+        ok: true, 
+        user: { id: user._id, name: user.name, email: user.email },
+        sessionId,
+        loginTime
+      });
     }
 
     if ((method === "face") || (!method && embedding && !password)) {
@@ -84,7 +111,33 @@ export async function POST(request) {
           { status: 401 }
         );
       }
-      return NextResponse.json({ ok: true, user: { id: user._id, name: user.name, email: user.email }, similarity: maxSim, distance: minDist, cosTh, distTh });
+      
+      // Generate unique session ID
+      const sessionId = generateSessionId();
+      const loginTime = new Date();
+      
+      // Store session in database
+      const sessions = db.collection("sessions");
+      await sessions.insertOne({
+        sessionId,
+        userId: user._id,
+        email: user.email,
+        loginMethod: "face",
+        loginTime,
+        faceMatchScore: { similarity: maxSim, distance: minDist },
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      });
+      
+      return NextResponse.json({ 
+        ok: true, 
+        user: { id: user._id, name: user.name, email: user.email }, 
+        sessionId,
+        loginTime,
+        similarity: maxSim, 
+        distance: minDist, 
+        cosTh, 
+        distTh 
+      });
     }
 
     // Fallback: if both provided or neither matches method, prefer explicit method or require one
