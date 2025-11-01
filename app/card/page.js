@@ -125,7 +125,7 @@ export default function CardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8 pb-32 sm:pt-32 sm:pb-8">
       <Navigation />
       <div className="max-w-2xl mx-auto">
         <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">
