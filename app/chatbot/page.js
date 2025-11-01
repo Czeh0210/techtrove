@@ -338,7 +338,7 @@ export default function ChatbotPage() {
         <div className="flex flex-1 overflow-hidden">
           <div className="flex-1 flex flex-col">
             {/* Hero content with fade transition */}
-            <div className={`absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-700 ${showHero && chatLog.length === 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className={`absolute inset-0 z-20 flex items-center justify-center transition-all duration-1000 ease-out ${showHero && chatLog.length === 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
               <div className="w-full max-w-3xl px-4 md:px-8 text-center space-y-5">
                 <h1 className="text-sm text-gray-600 dark:text-gray-400 group font-geist mx-auto px-5 py-2 bg-gradient-to-tr from-zinc-300/20 via-gray-400/20 to-transparent dark:from-zinc-300/5 dark:via-gray-400/5 border-[2px] border-black/5 dark:border-white/5 rounded-3xl w-fit">
                   Welcome to TechTrove Banking
