@@ -1237,6 +1237,9 @@ export default function CardPage() {
         {/* Action Loading/Success/Error Dialog */}
         <Dialog open={actionDialog.open} onOpenChange={(open) => !open && setActionDialog({ ...actionDialog, open: false })}>
           <DialogContent className="sm:max-w-md" showCloseButton={actionDialog.status !== 'loading'}>
+            <DialogHeader>
+              <DialogTitle className="sr-only">{actionDialog.title}</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center justify-center py-6">
               {/* Loading State */}
               {actionDialog.status === 'loading' && (
