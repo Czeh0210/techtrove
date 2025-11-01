@@ -2,14 +2,47 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+const Camera = dynamic(() => import("@/components/Camera"), { ssr: false });
 
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState("login"); // "login" | "register"
+  const [loginMethod, setLoginMethod] = useState("password"); // "password" | "face"
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [registerError, setRegisterError] = useState("");
+  const [faceEmbedding, setFaceEmbedding] = useState(null);
+  const [registerEmbeddings, setRegisterEmbeddings] = useState([]);
+  const [registerCount, setRegisterCount] = useState(0);
+  const REGISTER_TARGET = 3;
+  const hasFace = Array.isArray(faceEmbedding) && faceEmbedding.length > 0;
+
+  // Reset face embedding when switching modes to avoid stale embeddings
+  useEffect(() => {
+    setFaceEmbedding(null);
+    setLoginError("");
+  }, [mode]);
+
+  // Face attempts (lockout at 3). Reset on page load; logout clears as well.
+  const [faceAttempts, setFaceAttempts] = useState(0);
+  useEffect(() => {
+    const stored = Number(window.localStorage.getItem("faceAttempts") || 0);
+    if (Number.isFinite(stored)) setFaceAttempts(stored);
+  }, []);
+  function incFaceAttempts() {
+    setFaceAttempts((n) => {
+      const next = n + 1;
+      window.localStorage.setItem("faceAttempts", String(next));
+      return next;
+    });
+  }
+  function resetFaceAttempts() {
+    setFaceAttempts(0);
+    window.localStorage.removeItem("faceAttempts");
+  }
 
   useEffect(() => {
     if (!showSuccess) return;
@@ -36,12 +69,16 @@ export default function AuthPage() {
       setRegisterError("Passwords do not match");
       return;
     }
+    if (!Array.isArray(registerEmbeddings) || registerEmbeddings.length < REGISTER_TARGET) {
+      setRegisterError(`Please capture ${REGISTER_TARGET} face samples (${registerEmbeddings.length}/${REGISTER_TARGET})`);
+      return;
+    }
     try {
       setLoading(true);
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, embeddings: registerEmbeddings }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -51,6 +88,8 @@ export default function AuthPage() {
       setShowSuccess(true);
       setTimeout(() => setMode("login"), 1200);
       event.currentTarget.reset();
+      setRegisterEmbeddings([]);
+      setRegisterCount(0);
     } catch (err) {
       setRegisterError("Network error. Please try again.");
     } finally {
@@ -65,23 +104,50 @@ export default function AuthPage() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") || "").trim();
     const password = String(form.get("password") || "");
-    if (!email || !password) {
-      setLoginError("Please enter email and password");
-      return;
+    if (loginMethod === "password") {
+      if (!email || !password) {
+        setLoginError("Please enter email and password");
+        return;
+      }
+    } else {
+      if (faceAttempts >= 3) {
+        setLoginError("Face attempts exceeded. Use password login.");
+        return;
+      }
+      if (!Array.isArray(faceEmbedding) || faceEmbedding.length === 0) {
+        setLoginError("Please capture your face before continuing");
+        return;
+      }
     }
     try {
       setLoading(true);
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password: loginMethod === "password" ? password : "",
+          embedding: loginMethod === "face" ? faceEmbedding : null,
+          method: loginMethod,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setLoginError(data?.error || "Login failed");
+        let extra = "";
+        if (typeof data?.similarity === "number" && typeof data?.cosTh === "number") {
+          extra += ` (cos: ${data.similarity.toFixed(3)} < ${data.cosTh.toFixed(2)}`;
+          if (typeof data?.distance === "number" && typeof data?.distTh === "number") {
+            extra += ` | dist: ${data.distance.toFixed(3)} > ${data.distTh.toFixed(2)}`;
+          }
+          extra += ")";
+        }
+        setLoginError((data?.error || "Login failed") + extra);
+        if (loginMethod === "face") incFaceAttempts();
         return;
       }
-      router.push("/");
+      // success
+      resetFaceAttempts();
+      router.push("/dashboard");
     } catch (err) {
       setLoginError("Network error. Please try again.");
     } finally {
@@ -152,6 +218,14 @@ export default function AuthPage() {
 
         {mode === "login" ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div className="flex rounded-md bg-zinc-100 p-1 dark:bg-zinc-800">
+              <button type="button" onClick={() => setLoginMethod("password")} className={"flex-1 rounded px-3 py-1 text-sm " + (loginMethod === "password" ? "bg-white dark:bg-zinc-900" : "opacity-70")}>
+                Password
+              </button>
+              <button type="button" onClick={() => setLoginMethod("face")} className={"flex-1 rounded px-3 py-1 text-sm " + (loginMethod === "face" ? "bg-white dark:bg-zinc-900" : "opacity-70")}>
+                Face
+              </button>
+            </div>
             <div className="space-y-1.5">
               <label htmlFor="login-email" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                 Email
@@ -165,6 +239,7 @@ export default function AuthPage() {
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:ring-zinc-300"
               />
             </div>
+            {loginMethod === "password" && (
             <div className="space-y-1.5">
               <label htmlFor="login-password" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                 Password
@@ -178,6 +253,19 @@ export default function AuthPage() {
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:ring-zinc-300"
               />
             </div>
+            )}
+            {loginMethod === "face" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Face verification</label>
+              <Camera autoCapture={false} onEmbedding={setFaceEmbedding} />
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Click "Capture Face" then Sign in. Attempts: {faceAttempts}/3</p>
+              {hasFace && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 inline-block dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-100">
+                  Face detected
+                </div>
+              )}
+            </div>
+            )}
 
             {loginError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200">
@@ -188,7 +276,7 @@ export default function AuthPage() {
             <button
               type="submit"
               className="mt-2 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 focus:ring-2 focus:ring-zinc-900 disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus:ring-zinc-300"
-              disabled={loading}
+              disabled={loading || (loginMethod === "face" ? (!hasFace || faceAttempts >= 3) : false)}
             >
               Sign in
             </button>
@@ -258,6 +346,26 @@ export default function AuthPage() {
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:ring-zinc-300"
               />
             </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Face enrollment</label>
+              <Camera
+                autoCapture={false}
+                onEmbedding={(desc) => {
+                  setRegisterEmbeddings((prev) => {
+                    if (prev.length >= REGISTER_TARGET) return prev;
+                    const next = [...prev, desc];
+                    setRegisterCount(next.length);
+                    return next;
+                  });
+                }}
+              />
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Capture {REGISTER_TARGET} samples. We store embeddings, not photos.</p>
+              {registerCount > 0 && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 inline-block dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-100">
+                  Samples: {registerCount}/{REGISTER_TARGET}
+                </div>
+              )}
+            </div>
 
             {registerError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200">
@@ -268,7 +376,7 @@ export default function AuthPage() {
             <button
               type="submit"
               className="mt-2 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800 focus:ring-2 focus:ring-zinc-900 disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus:ring-zinc-300"
-              disabled={loading}
+              disabled={loading || registerCount < REGISTER_TARGET}
             >
               Create account
             </button>

@@ -12,6 +12,8 @@
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
     "bcryptjs": "^3.0.2",
+    "crypto-js": "^4.2.0",
+    "face-api.js": "^0.22.2",
     "mongodb": "^6.20.0",
     "next": "16.0.1",
     "react": "19.2.0",
