@@ -172,7 +172,16 @@ export default function SubscriptionPage() {
   }, [userInfo]);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-indigo-100 dark:bg-black px-4 pb-32 sm:pt-32 sm:pb-8">
+    <div className="min-h-screen w-full relative overflow-hidden px-4 pb-32 sm:pt-32 sm:pb-8">
+      {/* Animated Aurora Background */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50"></div>
+        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-aurora-1"></div>
+        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-aurora-2"></div>
+        <div className="absolute bottom-0 left-1/3 w-[550px] h-[550px] bg-gradient-to-br from-indigo-400/30 to-purple-400/30 rounded-full blur-3xl animate-aurora-3"></div>
+        <div className="absolute top-1/2 right-1/4 w-[450px] h-[450px] bg-gradient-to-br from-pink-400/30 to-rose-400/30 rounded-full blur-3xl animate-aurora-4"></div>
+      </div>
+      
       <Navigation />
       
       {/* Notification Toast */}
