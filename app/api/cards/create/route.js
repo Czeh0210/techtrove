@@ -12,6 +12,8 @@ export async function POST(request) {
     const cvv = typeof body.cvv === "number" ? body.cvv : 0;
     const expiryDate = typeof body.expiryDate === "string" ? body.expiryDate : "";
     const createdDate = typeof body.createdDate === "string" ? body.createdDate : "";
+    const balance = typeof body.balance === "number" ? body.balance : 1000;
+    const currency = typeof body.currency === "string" ? body.currency : "MYR";
     const userId = typeof body.userId === "string" ? body.userId : "";
     const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
 
@@ -45,9 +47,12 @@ export async function POST(request) {
       cvv,
       expiryDate,
       createdDate,
+      balance,
+      currency,
       userId,
       sessionId,
       createdAt: new Date(),
+      lastUpdated: new Date(),
     };
 
     const result = await cards.insertOne(cardDoc);
@@ -56,12 +61,15 @@ export async function POST(request) {
       ok: true,
       cardId: result.insertedId,
       card: {
+        _id: result.insertedId.toString(),
         name: cardDoc.name,
         bank: cardDoc.bank,
         accountNumber: cardDoc.accountNumber,
         cvv: cardDoc.cvv,
         expiryDate: cardDoc.expiryDate,
         createdDate: cardDoc.createdDate,
+        balance: cardDoc.balance,
+        currency: cardDoc.currency,
       }
     }, { status: 201 });
   } catch (error) {

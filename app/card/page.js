@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Navigation from "@/components/Navigation";
 import ScrollStack, { ScrollStackItem } from "@/components/ui/scroll-stack";
+import * as faceapi from "face-api.js";
 
 export default function CardPage() {
   const router = useRouter();
@@ -15,6 +16,12 @@ export default function CardPage() {
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [showCardOptions, setShowCardOptions] = useState(false);
+  const [showFaceVerification, setShowFaceVerification] = useState(false);
+  const [verifiedCardDetails, setVerifiedCardDetails] = useState(null);
+  const [videoStream, setVideoStream] = useState(null);
+  const [faceVerifying, setFaceVerifying] = useState(false);
 
   // Malaysian Banks
   const malaysianBanks = [
@@ -127,6 +134,8 @@ export default function CardPage() {
       createdDate: new Date().toLocaleDateString(),
       cvv: Math.floor(100 + Math.random() * 900), // Random 3-digit CVV
       expiryDate: `${Math.floor(Math.random() * 12) + 1}/${new Date().getFullYear() + 3}`,
+      balance: 1000, // Default RM 1000
+      currency: "MYR", // Malaysian Ringgit
       userId: userInfo.id,
       sessionId: sessionId,
     };
@@ -163,25 +172,218 @@ export default function CardPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8 pb-32 sm:pt-32 sm:pb-8">
-      <Navigation />
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">
-          Create Your Card
-        </h1>
+  // Handle card click to show options
+  const handleCardClick = (card) => {
+    setSelectedCard(card);
+    setShowCardOptions(true);
+  };
 
-        {/* Initial Create Account Button */}
-        {!showForm && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+  // Handle delete card
+  const handleDeleteCard = async () => {
+    if (!selectedCard) return;
+    
+    try {
+      const res = await fetch(`/api/cards/delete?cardId=${selectedCard._id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setCards(cards.filter(c => c._id !== selectedCard._id));
+        setShowCardOptions(false);
+        setSelectedCard(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete card");
+      }
+    } catch (error) {
+      console.error("Error deleting card:", error);
+      alert("Failed to delete card");
+    }
+  };
+
+  // Initialize face-api models
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const loadModels = async () => {
+      const MODEL_URL = "/models";
+      try {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        console.log("Face detection models loaded");
+      } catch (err) {
+        console.error("Error loading face-api models:", err);
+      }
+    };
+    loadModels();
+  }, []);
+
+  // Handle face verification
+  const handleFaceVerification = async () => {
+    setShowCardOptions(false);
+    setShowFaceVerification(true);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setVideoStream(stream);
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("Failed to access camera");
+      setShowFaceVerification(false);
+    }
+  };
+
+  // Capture and verify face
+  const captureFaceAndVerify = async () => {
+    if (!videoRef.current || faceVerifying) return;
+    
+    setFaceVerifying(true);
+    console.log("Starting face verification...");
+    
+    try {
+      const detection = await faceapi
+        .detectSingleFace(videoRef.current, new faceapi.SsdMobilenetv1Options())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        console.log("No face detected");
+        alert("No face detected. Please try again.");
+        setFaceVerifying(false);
+        return;
+      }
+
+      console.log("Face detected, extracting embedding...");
+      const embedding = Array.from(detection.descriptor);
+      console.log("Embedding length:", embedding.length);
+
+      // Verify face with login API
+      console.log("Sending verification request to API...");
+      console.log("Email:", userInfo.email);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userInfo.email,
+          embedding,
+          method: "face"
+        }),
+      });
+
+      console.log("Response status:", res.status);
+      console.log("Response ok:", res.ok);
+      
+      let data;
+      try {
+        data = await res.json();
+        console.log("API response:", data);
+      } catch (e) {
+        console.error("Failed to parse JSON response:", e);
+        alert("Server error: Invalid response format");
+        setFaceVerifying(false);
+        return;
+      }
+
+      if (res.ok && data.ok) {
+        console.log("Face verified successfully!");
+        console.log("Similarity:", data.similarity);
+        console.log("Distance:", data.distance);
+        
+        // Face verified, show card details with actual balance
+        setVerifiedCardDetails({
+          ...selectedCard,
+          amount: selectedCard.balance || 1000 // Use actual balance from card
+        });
+        
+        // Stop camera
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
+          setVideoStream(null);
+        }
+        setShowFaceVerification(false);
+        setFaceVerifying(false);
+      } else {
+        console.error("Face verification failed:", data);
+        console.error("Status:", res.status);
+        const errorMsg = data.error || data.message || 'Unknown error';
+        if (data.similarity !== undefined) {
+          console.log("Your similarity score:", data.similarity, "Required:", data.cosTh);
+          console.log("Your distance:", data.distance, "Required:", data.distTh);
+          alert(`Face verification failed!\nSimilarity: ${data.similarity.toFixed(3)} (need ≥${data.cosTh})\nDistance: ${data.distance.toFixed(3)} (need ≤${data.distTh})`);
+        } else {
+          alert(`Face verification failed: ${errorMsg}`);
+        }
+        setFaceVerifying(false);
+      }
+    } catch (err) {
+      console.error("Face verification error:", err);
+      alert("Verification failed: " + err.message);
+      setFaceVerifying(false);
+    }
+  };
+
+  // Close face verification
+  const closeFaceVerification = () => {
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      setVideoStream(null);
+    }
+    setShowFaceVerification(false);
+    setSelectedCard(null);
+  };
+
+  // Close card details
+  const closeCardDetails = () => {
+    setVerifiedCardDetails(null);
+    setSelectedCard(null);
+  };
+
+  return (
+    <div className="min-h-screen w-full relative overflow-hidden p-8 pb-32 sm:pt-32 sm:pb-8">
+      {/* Animated Aurora Background */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50"></div>
+        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-aurora-1"></div>
+        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-aurora-2"></div>
+        <div className="absolute bottom-0 left-1/3 w-[550px] h-[550px] bg-gradient-to-br from-indigo-400/30 to-purple-400/30 rounded-full blur-3xl animate-aurora-3"></div>
+        <div className="absolute top-1/2 right-1/4 w-[450px] h-[450px] bg-gradient-to-br from-pink-400/30 to-rose-400/30 rounded-full blur-3xl animate-aurora-4"></div>
+      </div>
+
+      <Navigation />
+      <div className="max-w-2xl mx-auto relative z-10">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-bold text-gray-800">
+            Your Cards
+          </h1>
+          
+          {/* Plus Icon Button */}
+          {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+              className="flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-110 group"
+              title="Create New Card"
             >
-              Create Account
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-8 w-8 transition-transform duration-500 ease-in-out group-hover:rotate-90" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor" 
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Card Creation Form */}
         {showForm && (
@@ -283,12 +485,35 @@ export default function CardPage() {
                     
                     {/* Card content */}
                     <div className="relative bg-black rounded-2xl p-8 text-white h-full">
+                      {/* Three Dot Menu Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCardClick(card);
+                        }}
+                        className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition duration-200 z-10"
+                        title="Options"
+                      >
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          className="h-6 w-6" 
+                          fill="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <circle cx="12" cy="5" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                      </button>
+
                       {/* Bank Name at Top */}
-                      <div className="mb-4">
-                        <div className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-orange-400">
-                          {card.bank}
+                      {card.bank && (
+                        <div className="mb-4">
+                          <div className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-orange-400">
+                            {card.bank}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       <div className="mb-6">
                         <div className="text-sm opacity-60 mb-2">Card Number</div>
@@ -337,6 +562,121 @@ export default function CardPage() {
             <p className="text-sm text-gray-600 mt-4 text-center">
               Scroll up or down to view all cards ↕
             </p>
+          </div>
+        )}
+
+        {/* Card Options Modal */}
+        {showCardOptions && selectedCard && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-gray-800">Card Options</h3>
+              <div className="space-y-4">
+                <button
+                  onClick={handleFaceVerification}
+                  className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 flex items-center justify-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View Details
+                </button>
+                <button
+                  onClick={handleDeleteCard}
+                  className="w-full bg-red-600 text-white py-4 rounded-lg font-semibold hover:bg-red-700 transition duration-200 flex items-center justify-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete Card
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCardOptions(false);
+                    setSelectedCard(null);
+                  }}
+                  className="w-full bg-gray-300 text-gray-700 py-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Face Verification Modal */}
+        {showFaceVerification && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-gray-800">Face Verification</h3>
+              <div className="relative">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full rounded-lg"
+                  onLoadedMetadata={() => console.log("Video loaded")}
+                />
+                <canvas ref={canvasRef} className="absolute top-0 left-0" />
+              </div>
+              <div className="mt-6 space-y-4">
+                <button
+                  onClick={captureFaceAndVerify}
+                  disabled={faceVerifying}
+                  className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {faceVerifying ? "Verifying..." : "Capture & Verify"}
+                </button>
+                <button
+                  onClick={closeFaceVerification}
+                  className="w-full bg-gray-300 text-gray-700 py-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Card Details Modal (After Verification) */}
+        {verifiedCardDetails && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-gray-800">Card Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-gray-600">Bank</label>
+                  <p className="text-lg font-semibold">{verifiedCardDetails.bank}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Cardholder Name</label>
+                  <p className="text-lg font-semibold">{verifiedCardDetails.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Card Number</label>
+                  <p className="text-lg font-mono">{formatAccountNumber(verifiedCardDetails.accountNumber)}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">CVV</label>
+                  <p className="text-lg font-mono">{verifiedCardDetails.cvv}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Expiry Date</label>
+                  <p className="text-lg font-mono">{verifiedCardDetails.expiryDate}</p>
+                </div>
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="text-sm text-gray-600">Available Balance</label>
+                  <p className="text-3xl font-bold text-green-600">RM {verifiedCardDetails.amount.toLocaleString()}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeCardDetails}
+                className="w-full mt-6 bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
       </div>
