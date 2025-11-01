@@ -22,6 +22,7 @@ export default function CardPage() {
   const [verifiedCardDetails, setVerifiedCardDetails] = useState(null);
   const [videoStream, setVideoStream] = useState(null);
   const [faceVerifying, setFaceVerifying] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState(null); // 'success', 'error', or null
 
   // Malaysian Banks
   const malaysianBanks = [
@@ -297,31 +298,49 @@ export default function CardPage() {
         console.log("Similarity:", data.similarity);
         console.log("Distance:", data.distance);
         
-        // Face verified, show card details with actual balance
-        setVerifiedCardDetails({
-          ...selectedCard,
-          amount: selectedCard.balance || 1000 // Use actual balance from card
-        });
+        // Show success animation
+        setVerificationStatus('success');
         
-        // Stop camera
-        if (videoStream) {
-          videoStream.getTracks().forEach(track => track.stop());
-          setVideoStream(null);
-        }
-        setShowFaceVerification(false);
-        setFaceVerifying(false);
+        // Wait for animation then show card details
+        setTimeout(() => {
+          setVerifiedCardDetails({
+            ...selectedCard,
+            amount: selectedCard.balance || 1000 // Use actual balance from card
+          });
+          
+          // Stop camera
+          if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            setVideoStream(null);
+          }
+          setShowFaceVerification(false);
+          setFaceVerifying(false);
+          setVerificationStatus(null);
+        }, 1500);
       } else {
         console.error("Face verification failed:", data);
         console.error("Status:", res.status);
+        
+        // Show error animation (shake)
+        setVerificationStatus('error');
+        
+        setTimeout(() => {
+          setVerificationStatus(null);
+          setFaceVerifying(false);
+        }, 1000);
+        
         const errorMsg = data.error || data.message || 'Unknown error';
         if (data.similarity !== undefined) {
           console.log("Your similarity score:", data.similarity, "Required:", data.cosTh);
           console.log("Your distance:", data.distance, "Required:", data.distTh);
-          alert(`Face verification failed!\nSimilarity: ${data.similarity.toFixed(3)} (need ≥${data.cosTh})\nDistance: ${data.distance.toFixed(3)} (need ≤${data.distTh})`);
+          setTimeout(() => {
+            alert(`Face verification failed!\nSimilarity: ${data.similarity.toFixed(3)} (need ≥${data.cosTh})\nDistance: ${data.distance.toFixed(3)} (need ≤${data.distTh})`);
+          }, 1000);
         } else {
-          alert(`Face verification failed: ${errorMsg}`);
+          setTimeout(() => {
+            alert(`Face verification failed: ${errorMsg}`);
+          }, 1000);
         }
-        setFaceVerifying(false);
       }
     } catch (err) {
       console.error("Face verification error:", err);
@@ -608,7 +627,8 @@ export default function CardPage() {
         {showFaceVerification && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl">
-              <h3 className="text-2xl font-bold mb-6 text-gray-800">Face Verification</h3>
+              <h3 className="text-2xl font-bold mb-6 text-gray-800 text-center">Face Verification</h3>
+              
               <div className="relative">
                 <video
                   ref={videoRef}
@@ -619,14 +639,91 @@ export default function CardPage() {
                   onLoadedMetadata={() => console.log("Video loaded")}
                 />
                 <canvas ref={canvasRef} className="absolute top-0 left-0" />
+                
+                {/* Face ID Icon Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ marginTop: '-315px' }}>
+                  <div className={`transition-all duration-500 ${
+                    verificationStatus === 'success' 
+                      ? 'scale-110 opacity-100' 
+                      : verificationStatus === 'error'
+                      ? 'animate-shake opacity-100'
+                      : faceVerifying
+                      ? 'opacity-100'
+                      : 'opacity-60'
+                  }`}>
+                    {verificationStatus === 'success' ? (
+                      // Success Checkmark
+                      <div className="bg-green-500 rounded-full p-6 shadow-2xl animate-bounce-once">
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          className="h-16 w-16 text-white" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                          strokeWidth={3}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : verificationStatus === 'error' ? (
+                      // Error X
+                      <div className="bg-red-500 rounded-full p-6 shadow-2xl">
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          className="h-16 w-16 text-white" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                          strokeWidth={3}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                    ) : (
+                      // Face ID Icon with Pulsing Blue Ring
+                      <div className="relative">
+                        {/* Pulsing Blue Rings (when verifying) */}
+                        {faceVerifying && (
+                          <>
+                            <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping"></div>
+                            <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-pulse"></div>
+                          </>
+                        )}
+                        
+                        {/* Face ID Icon */}
+                        <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-4 shadow-xl relative">
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            className={`h-20 w-20 transition-colors duration-300 ${
+                              faceVerifying ? 'text-blue-500' : 'text-blue-600'
+                            }`}
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                          >
+                          {/* Face ID corners */}
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a3 3 0 013-3h2M3 16v2a3 3 0 003 3h2M21 8V6a3 3 0 00-3-3h-2M21 16v2a3 3 0 01-3 3h-2" />
+                          {/* Face dots and smile */}
+                          <circle cx="9" cy="10" r="0.5" fill="currentColor" strokeWidth={2} />
+                          <circle cx="15" cy="10" r="0.5" fill="currentColor" strokeWidth={2} />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 14s1.5 2 3 2 3-2 3-2" />
+                          <line x1="12" y1="10" x2="12" y2="13" strokeLinecap="round" />
+                        </svg>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
+              
               <div className="mt-6 space-y-4">
                 <button
                   onClick={captureFaceAndVerify}
-                  disabled={faceVerifying}
-                  className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={faceVerifying || verificationStatus !== null}
+                  className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {faceVerifying ? "Verifying..." : "Capture & Verify"}
+                  {faceVerifying ? "Verifying..." : verificationStatus === 'success' ? "Success!" : verificationStatus === 'error' ? "Failed" : "Scan Face"}
                 </button>
                 <button
                   onClick={closeFaceVerification}
