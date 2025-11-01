@@ -61,7 +61,16 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen w-full flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Enhanced Gradient Background */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"></div>
+        <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-400/20 to-purple-400/20 rounded-full blur-3xl animate-aurora-1"></div>
+        <div className="absolute top-1/4 right-0 w-[700px] h-[700px] bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl animate-aurora-2"></div>
+        <div className="absolute bottom-0 left-1/3 w-[650px] h-[650px] bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl animate-aurora-3"></div>
+        <div className="absolute top-1/2 right-1/4 w-[550px] h-[550px] bg-gradient-to-br from-pink-400/20 to-rose-400/20 rounded-full blur-3xl animate-aurora-4"></div>
+      </div>
+      
       <div className="w-full max-w-md rounded-2xl bg-white border border-gray-100 p-6 shadow-sm">
         <div className="mb-6">
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Create account</h1>

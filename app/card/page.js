@@ -5,6 +5,40 @@ import { useRouter } from "next/navigation";
 import Navigation from "@/components/Navigation";
 import * as faceapi from "face-api.js";
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle,
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, ArrowLeft, CreditCard, Eye, Trash2, X, CheckCircle2, AlertCircle, Scan } from "lucide-react";
 
 export default function CardPage() {
   const router = useRouter();
@@ -28,6 +62,7 @@ export default function CardPage() {
   const [currentCardIndex, setCurrentCardIndex] = useState(0); // Current card in carousel
   const [dragDirection, setDragDirection] = useState(null);
   const [modelsLoaded, setModelsLoaded] = useState(false); // Track if face-api models are loaded
+  const [actionDialog, setActionDialog] = useState({ open: false, status: 'loading', message: '', title: '' }); // loading, success, error
 
   // Card stack animation values
   const dragY = useMotionValue(0);
@@ -169,6 +204,14 @@ export default function CardPage() {
     try {
       setLoading(true);
       
+      // Show loading dialog
+      setActionDialog({
+        open: true,
+        status: 'loading',
+        title: 'Creating Card',
+        message: 'Please wait while we create your new card...'
+      });
+      
       // Store card in MongoDB
       const res = await fetch("/api/cards/create", {
         method: "POST",
@@ -178,8 +221,17 @@ export default function CardPage() {
 
       const data = await res.json();
 
+      // Minimum 2 second loading display
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       if (!res.ok) {
-        setError(data?.error || "Failed to create card");
+        // Show error dialog
+        setActionDialog({
+          open: true,
+          status: 'error',
+          title: 'Card Creation Failed',
+          message: data?.error || "Failed to create card. Please try again."
+        });
         return;
       }
 
@@ -187,11 +239,29 @@ export default function CardPage() {
       setCards([...cards, data.card]);
       setCardName(""); // Clear input after successful registration
       setSelectedBank(""); // Clear bank selection
-      setShowForm(false); // Hide form after submission
+      setError(""); // Clear any errors
+      setShowForm(false); // Close dialog after submission
+      
+      // Show success dialog
+      setActionDialog({
+        open: true,
+        status: 'success',
+        title: 'Card Created Successfully!',
+        message: `Your ${selectedBank} card has been created with RM 1,000 balance.`
+      });
       
       console.log("Card created successfully:", data.cardId);
     } catch (err) {
-      setError("Network error. Please try again.");
+      // Minimum 2 second loading display
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Show error dialog
+      setActionDialog({
+        open: true,
+        status: 'error',
+        title: 'Network Error',
+        message: "Unable to connect to the server. Please check your connection and try again."
+      });
       console.error("Card creation error:", err);
     } finally {
       setLoading(false);
@@ -209,21 +279,57 @@ export default function CardPage() {
     if (!selectedCard) return;
     
     try {
+      // Show loading dialog
+      setActionDialog({
+        open: true,
+        status: 'loading',
+        title: 'Deleting Card',
+        message: 'Please wait while we delete your card...'
+      });
+      
       const res = await fetch(`/api/cards/delete?cardId=${selectedCard._id}`, {
         method: "DELETE",
       });
+
+      // Minimum 2 second loading display
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       if (res.ok) {
         setCards(cards.filter(c => c._id !== selectedCard._id));
         setShowCardOptions(false);
         setSelectedCard(null);
+        
+        // Show success dialog
+        setActionDialog({
+          open: true,
+          status: 'success',
+          title: 'Card Deleted Successfully!',
+          message: `Your ${selectedCard.bank} card has been permanently deleted.`
+        });
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to delete card");
+        
+        // Show error dialog
+        setActionDialog({
+          open: true,
+          status: 'error',
+          title: 'Card Deletion Failed',
+          message: data.error || "Failed to delete card. Please try again."
+        });
       }
     } catch (error) {
+      // Minimum 2 second loading display
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       console.error("Error deleting card:", error);
-      alert("Failed to delete card");
+      
+      // Show error dialog
+      setActionDialog({
+        open: true,
+        status: 'error',
+        title: 'Network Error',
+        message: "Unable to connect to the server. Please check your connection and try again."
+      });
     }
   };
 
@@ -442,155 +548,191 @@ export default function CardPage() {
   };
 
   return (
-    <div className="min-h-screen w-full relative overflow-hidden p-8 pb-32 sm:pt-32 sm:pb-8">
-      {/* Animated Aurora Background */}
+    <div className="min-h-screen w-full relative overflow-hidden">
+      {/* Enhanced Gradient Background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50"></div>
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-aurora-1"></div>
-        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-aurora-2"></div>
-        <div className="absolute bottom-0 left-1/3 w-[550px] h-[550px] bg-gradient-to-br from-indigo-400/30 to-purple-400/30 rounded-full blur-3xl animate-aurora-3"></div>
-        <div className="absolute top-1/2 right-1/4 w-[450px] h-[450px] bg-gradient-to-br from-pink-400/30 to-rose-400/30 rounded-full blur-3xl animate-aurora-4"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50"></div>
+        <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-400/20 to-purple-400/20 rounded-full blur-3xl animate-aurora-1"></div>
+        <div className="absolute top-1/4 right-0 w-[700px] h-[700px] bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl animate-aurora-2"></div>
+        <div className="absolute bottom-0 left-1/3 w-[650px] h-[650px] bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl animate-aurora-3"></div>
+        <div className="absolute top-1/2 right-1/4 w-[550px] h-[550px] bg-gradient-to-br from-pink-400/20 to-rose-400/20 rounded-full blur-3xl animate-aurora-4"></div>
       </div>
 
       <Navigation />
-      <div className="max-w-6xl mx-auto relative z-10">
-        <div className="flex items-start justify-between mb-12">
-          <div>
-            <h1 className="text-5xl font-bold text-gray-900 mb-2">
-              My Cards
-            </h1>
-            <p className="text-gray-600 text-lg">
-              Manage your bank accounts and cards
-            </p>
-          </div>
-          
-          {/* Create Account Button */}
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl font-medium"
-              title="Create New Card"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor" 
-                strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Create Account
-            </button>
-          )}
-        </div>
-
-        {/* Card Creation Form */}
-        {showForm && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            {/* Back Arrow */}
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setCardName("");
-                setSelectedBank("");
-                setError("");
-              }}
-              className="flex items-center text-gray-600 hover:text-gray-800 mb-4 transition duration-200"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5 mr-2" 
-                viewBox="0 0 20 20" 
-                fill="currentColor"
-              >
-                <path 
-                  fillRule="evenodd" 
-                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" 
-                  clipRule="evenodd" 
-                />
-              </svg>
-              Back
-            </button>
-
-            <form onSubmit={handleCreateCard}>
-              <div className="mb-4">
-                <label
-                  htmlFor="bankSelect"
-                  className="block text-gray-700 font-semibold mb-2"
-                >
-                  Select Bank
-                </label>
-                <select
-                  id="bankSelect"
-                  value={selectedBank}
-                  onChange={(e) => setSelectedBank(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={loading}
-                >
-                  <option value="">Choose a bank...</option>
-                  {malaysianBanks.map((bank) => (
-                    <option key={bank} value={bank}>
-                      {bank}
-                    </option>
-                  ))}
-                </select>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10">
+        {/* Modern Header Section */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-8 sm:mb-12"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                  <CreditCard className="h-6 w-6 text-white" />
+                </div>
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
+                  My Cards
+                </h1>
               </div>
-
-              <div className="mb-4">
-                <label
-                  htmlFor="cardName"
-                  className="block text-gray-700 font-semibold mb-2"
-                >
-                  Cardholder Name
-                </label>
-                <input
-                  type="text"
-                  id="cardName"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={loading}
-                />
-              </div>
-              
-              {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  {error}
+              <p className="text-gray-600 text-base sm:text-lg ml-14">
+                Manage your virtual bank accounts securely
+              </p>
+              {cards.length > 0 && !showForm && (
+                <div className="flex items-center gap-2 ml-14">
+                  <Badge variant="secondary" className="text-xs">
+                    {cards.length} {cards.length === 1 ? 'Card' : 'Cards'}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    Total Balance: RM {cards.reduce((sum, card) => sum + (card.balance || 0), 0).toLocaleString()}
+                  </Badge>
                 </div>
               )}
+            </div>
+            
+            {/* Create Card Button with Dialog */}
+            <Dialog open={showForm} onOpenChange={setShowForm}>
+              <DialogTrigger asChild>
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 w-full sm:w-auto"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Create New Card
+                </Button>
+              </DialogTrigger>
               
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={loading}
-              >
-                {loading ? "Creating..." : "Submit"}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Loading Skeleton for Cards */}
-        {cardsLoading && (
-          <div className="w-full">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Loading your cards...</h2>
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="bg-white/50 rounded-2xl p-8 animate-pulse">
-                  <div className="h-6 bg-gray-300 rounded w-1/3 mb-6"></div>
-                  <div className="h-8 bg-gray-300 rounded w-3/4 mb-6"></div>
-                  <div className="flex justify-between mb-6">
-                    <div className="h-6 bg-gray-300 rounded w-1/4"></div>
-                    <div className="h-6 bg-gray-300 rounded w-1/5"></div>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <CreditCard className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <DialogTitle className="text-2xl">Create New Card</DialogTitle>
                   </div>
-                  <div className="h-4 bg-gray-300 rounded w-1/6"></div>
+                  <DialogDescription>
+                    Add a new virtual bank card to your account. Fill in the details below.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleCreateCard} className="space-y-6">
+                  {/* Bank Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="bankSelect" className="text-gray-700 font-semibold">
+                      Select Bank
+                    </Label>
+                    <Select 
+                      value={selectedBank} 
+                      onValueChange={setSelectedBank}
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Choose a bank..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {malaysianBanks.map((bank) => (
+                          <SelectItem key={bank} value={bank}>
+                            {bank}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Cardholder Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="cardName" className="text-gray-700 font-semibold">
+                      Cardholder Name
+                    </Label>
+                    <Input
+                      id="cardName"
+                      type="text"
+                      value={cardName}
+                      onChange={(e) => setCardName(e.target.value)}
+                      placeholder="Enter your name"
+                      disabled={loading}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  {/* Error Message */}
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Submit Buttons */}
+                  <DialogFooter className="gap-3 sm:gap-2 mt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowForm(false);
+                        setCardName("");
+                        setSelectedBank("");
+                        setError("");
+                      }}
+                      disabled={loading}
+                      className="flex-1 sm:flex-none"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    >
+                      {loading ? (
+                        <>
+                          <Spinner className="mr-2" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Card
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </motion.div>
+
+        {/* Enhanced Loading Skeleton */}
+        {cardsLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="w-full space-y-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <Spinner className="h-6 w-6 text-blue-600" />
+              <h2 className="text-2xl font-semibold text-gray-800">Loading your cards...</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 animate-pulse">
+                  <div className="space-y-4">
+                    <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-2/3"></div>
+                    <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-full"></div>
+                    <div className="flex justify-between gap-4">
+                      <div className="h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-1/3"></div>
+                      <div className="h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-1/4"></div>
+                    </div>
+                    <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-1/2"></div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Display Cards in Card Stack View */}
@@ -733,50 +875,141 @@ export default function CardPage() {
           </div>
         )}
 
-        {/* Card Options Modal */}
+        {/* Enhanced Card Options Modal */}
         {showCardOptions && selectedCard && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-              <h3 className="text-2xl font-bold mb-6 text-gray-800">Card Options</h3>
-              <div className="space-y-4">
-                <button
-                  onClick={handleFaceVerification}
-                  className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 flex items-center justify-center"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  View Details
-                </button>
-                <button
-                  onClick={handleDeleteCard}
-                  className="w-full bg-red-600 text-white py-4 rounded-lg font-semibold hover:bg-red-700 transition duration-200 flex items-center justify-center"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Delete Card
-                </button>
-                <button
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowCardOptions(false);
+              setSelectedCard(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", duration: 0.3 }}
+              className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Card Options</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => {
                     setShowCardOptions(false);
                     setSelectedCard(null);
                   }}
-                  className="w-full bg-gray-300 text-gray-700 py-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-200"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Card Info Preview */}
+              <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg shadow-sm">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{selectedCard.name}</p>
+                    <p className="text-sm text-gray-600">{selectedCard.bank}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <Button
+                  onClick={handleFaceVerification}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                  size="lg"
+                >
+                  <Eye className="h-5 w-5 mr-2" />
+                  View Details
+                </Button>
+                
+                {/* Delete Card with Confirmation */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      size="lg"
+                    >
+                      <Trash2 className="h-5 w-5 mr-2" />
+                      Delete Card
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete your card
+                        <span className="font-semibold text-gray-900"> {selectedCard?.name}</span> from
+                        <span className="font-semibold text-gray-900"> {selectedCard?.bank}</span>.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteCard}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <Button
+                  onClick={() => {
+                    setShowCardOptions(false);
+                    setSelectedCard(null);
+                  }}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
 
-        {/* Face Verification Modal */}
+        {/* Enhanced Face Verification Modal */}
         {showFaceVerification && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl">
-              <h3 className="text-2xl font-bold mb-6 text-gray-800 text-center">Face Verification</h3>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", duration: 0.3 }}
+              className="bg-white rounded-2xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Scan className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">Face Verification</h3>
+                </div>
+                <Badge variant={verificationStatus === 'success' ? 'default' : verificationStatus === 'error' ? 'destructive' : 'secondary'}>
+                  {verificationStatus === 'success' ? 'Verified' : verificationStatus === 'error' ? 'Failed' : 'Scanning'}
+                </Badge>
+              </div>
               
               <div className="relative">
                 <video
@@ -868,75 +1101,244 @@ export default function CardPage() {
               
               {/* Error Message Display */}
               {verificationMessage && (
-                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-red-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <p className="text-sm font-medium">{verificationMessage}</p>
-                  </div>
-                </div>
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg"
+                >
+                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium text-red-800">{verificationMessage}</p>
+                </motion.div>
               )}
               
-              <div className="mt-6 space-y-4">
-                <button
+              {/* Action Buttons */}
+              <div className="mt-6 flex gap-3">
+                <Button
+                  onClick={closeFaceVerification}
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button
                   onClick={captureFaceAndVerify}
                   disabled={faceVerifying || verificationStatus !== null}
-                  className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="lg"
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                 >
-                  {faceVerifying ? "Verifying..." : verificationStatus === 'success' ? "Success!" : verificationStatus === 'error' ? "Failed" : "Scan Face"}
-                </button>
-                <button
-                  onClick={closeFaceVerification}
-                  className="w-full bg-gray-300 text-gray-700 py-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-200"
-                >
-                  Cancel
-                </button>
+                  {faceVerifying ? (
+                    <>
+                      <Spinner className="mr-2" />
+                      Verifying...
+                    </>
+                  ) : verificationStatus === 'success' ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Success!
+                    </>
+                  ) : verificationStatus === 'error' ? (
+                    <>
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Try Again
+                    </>
+                  ) : (
+                    <>
+                      <Scan className="h-4 w-4 mr-2" />
+                      Scan Face
+                    </>
+                  )}
+                </Button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
 
-        {/* Card Details Modal (After Verification) */}
+        {/* Enhanced Card Details Modal (After Verification) */}
         {verifiedCardDetails && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-              <h3 className="text-2xl font-bold mb-6 text-gray-800">Card Details</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-600">Bank</label>
-                  <p className="text-lg font-semibold">{verifiedCardDetails.bank}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Cardholder Name</label>
-                  <p className="text-lg font-semibold">{verifiedCardDetails.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Card Number</label>
-                  <p className="text-lg font-mono">{formatAccountNumber(verifiedCardDetails.accountNumber)}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">CVV</label>
-                  <p className="text-lg font-mono">{verifiedCardDetails.cvv}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Expiry Date</label>
-                  <p className="text-lg font-mono">{verifiedCardDetails.expiryDate}</p>
-                </div>
-                <div className="pt-4 border-t border-gray-200">
-                  <label className="text-sm text-gray-600">Available Balance</label>
-                  <p className="text-3xl font-bold text-green-600">RM {verifiedCardDetails.amount.toLocaleString()}</p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            onClick={closeCardDetails}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Success Header */}
+              <div className="flex items-center justify-center mb-6">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
                 </div>
               </div>
-              <button
+              
+              <h3 className="text-2xl font-bold text-center mb-2 text-gray-900">Verification Successful</h3>
+              <p className="text-center text-gray-600 mb-6">Your card details are now accessible</p>
+
+              {/* Card Details */}
+              <div className="space-y-4 mb-6">
+                {/* Bank */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-xs text-gray-600 uppercase tracking-wide">Bank</Label>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">{verifiedCardDetails.bank}</p>
+                </div>
+
+                {/* Cardholder Name */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-xs text-gray-600 uppercase tracking-wide">Cardholder Name</Label>
+                  <p className="text-lg font-semibold text-gray-900 mt-1 uppercase">{verifiedCardDetails.name}</p>
+                </div>
+
+                {/* Card Number */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-xs text-gray-600 uppercase tracking-wide">Card Number</Label>
+                  <p className="text-lg font-mono text-gray-900 mt-1 tracking-wider">{formatAccountNumber(verifiedCardDetails.accountNumber)}</p>
+                </div>
+
+                {/* CVV & Expiry */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-xs text-gray-600 uppercase tracking-wide">CVV</Label>
+                    <p className="text-lg font-mono text-gray-900 mt-1">{verifiedCardDetails.cvv}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-xs text-gray-600 uppercase tracking-wide">Expiry Date</Label>
+                    <p className="text-lg font-mono text-gray-900 mt-1">{verifiedCardDetails.expiryDate}</p>
+                  </div>
+                </div>
+
+                {/* Balance - Highlighted */}
+                <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200">
+                  <Label className="text-xs text-green-700 uppercase tracking-wide font-semibold">Available Balance</Label>
+                  <p className="text-3xl font-bold text-green-600 mt-2">RM {verifiedCardDetails.amount.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <Button
                 onClick={closeCardDetails}
-                className="w-full mt-6 bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+                size="lg"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
                 Close
-              </button>
-            </div>
-          </div>
+              </Button>
+            </motion.div>
+          </motion.div>
         )}
+
+        {/* Action Loading/Success/Error Dialog */}
+        <Dialog open={actionDialog.open} onOpenChange={(open) => !open && setActionDialog({ ...actionDialog, open: false })}>
+          <DialogContent className="sm:max-w-md" showCloseButton={actionDialog.status !== 'loading'}>
+            <div className="flex flex-col items-center justify-center py-6">
+              {/* Loading State */}
+              {actionDialog.status === 'loading' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-4"
+                >
+                  <div className="relative">
+                    <Spinner className="h-16 w-16 text-blue-600" />
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-4 border-blue-200"
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{actionDialog.title}</h3>
+                    <p className="text-sm text-gray-600">{actionDialog.message}</p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Success State */}
+              {actionDialog.status === 'success' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="flex flex-col items-center gap-4"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                    className="relative"
+                  >
+                    <div className="p-4 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-16 w-16 text-green-600" />
+                    </div>
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-green-400"
+                      initial={{ scale: 1, opacity: 0.5 }}
+                      animate={{ scale: 1.5, opacity: 0 }}
+                      transition={{ duration: 0.6 }}
+                    />
+                  </motion.div>
+                  <div className="text-center">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{actionDialog.title}</h3>
+                    <p className="text-sm text-gray-600">{actionDialog.message}</p>
+                  </div>
+                  <Button
+                    onClick={() => setActionDialog({ ...actionDialog, open: false })}
+                    className="mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Done
+                  </Button>
+                </motion.div>
+              )}
+
+              {/* Error State */}
+              {actionDialog.status === 'error' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="flex flex-col items-center gap-4"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1, rotate: [0, -10, 10, -10, 0] }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                    className="relative"
+                  >
+                    <div className="p-4 bg-red-100 rounded-full">
+                      <AlertCircle className="h-16 w-16 text-red-600" />
+                    </div>
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-red-400"
+                      initial={{ scale: 1, opacity: 0.5 }}
+                      animate={{ scale: 1.5, opacity: 0 }}
+                      transition={{ duration: 0.6 }}
+                    />
+                  </motion.div>
+                  <div className="text-center">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{actionDialog.title}</h3>
+                    <p className="text-sm text-gray-600">{actionDialog.message}</p>
+                  </div>
+                  <Button
+                    onClick={() => setActionDialog({ ...actionDialog, open: false })}
+                    variant="destructive"
+                    className="mt-4"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Close
+                  </Button>
+                </motion.div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
