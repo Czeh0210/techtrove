@@ -7,30 +7,34 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
+    const bank = typeof body.bank === "string" ? body.bank.trim() : "";
     const accountNumber = typeof body.accountNumber === "string" ? body.accountNumber : "";
     const cvv = typeof body.cvv === "number" ? body.cvv : 0;
     const expiryDate = typeof body.expiryDate === "string" ? body.expiryDate : "";
     const createdDate = typeof body.createdDate === "string" ? body.createdDate : "";
+    const balance = typeof body.balance === "number" ? body.balance : 1000;
+    const currency = typeof body.currency === "string" ? body.currency : "MYR";
     const userId = typeof body.userId === "string" ? body.userId : "";
     const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
 
-    if (!name || !accountNumber || !userId) {
+    if (!name || !bank || !accountNumber || !userId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const db = await getDb();
     const cards = db.collection("cards");
 
-    // Check if this name already has a card for this user
+    // Check if this name already has a card for the same bank for this user
     const normalizedName = name.toLowerCase();
     const existingCard = await cards.findOne({ 
       normalizedName,
+      bank,
       userId 
     });
 
     if (existingCard) {
       return NextResponse.json({ 
-        error: "This name has already been registered. Each name can only create one card." 
+        error: `A card with the name "${name}" already exists for ${bank}. Please use a different name or select a different bank.` 
       }, { status: 409 });
     }
 
@@ -38,15 +42,17 @@ export async function POST(request) {
     const cardDoc = {
       name,
       normalizedName,
+      bank,
       accountNumber,
       cvv,
       expiryDate,
       createdDate,
+      balance: balance || 1000, // Initial balance RM1000
+      currency: currency || "MYR",
       userId,
       sessionId,
-      balance: 1000, // Initial balance RM1000
-      currency: "MYR",
       createdAt: new Date(),
+      lastUpdated: new Date(),
     };
 
     const result = await cards.insertOne(cardDoc);
@@ -55,7 +61,9 @@ export async function POST(request) {
       ok: true,
       cardId: result.insertedId,
       card: {
+        _id: result.insertedId.toString(),
         name: cardDoc.name,
+        bank: cardDoc.bank,
         accountNumber: cardDoc.accountNumber,
         cvv: cardDoc.cvv,
         expiryDate: cardDoc.expiryDate,

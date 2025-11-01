@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 
 export const runtime = "nodejs";
@@ -21,13 +21,14 @@ export async function GET(request) {
     return NextResponse.json({
       ok: true,
       cards: userCards.map(card => ({
-        id: card._id,
+        _id: card._id.toString(),
         name: card.name,
+        bank: card.bank,
         accountNumber: card.accountNumber,
         cvv: card.cvv,
         expiryDate: card.expiryDate,
         createdDate: card.createdDate,
-        balance: card.balance || 1000, // Default to RM1000 for existing cards
+        balance: card.balance || 1000,
         currency: card.currency || "MYR",
       }))
     });
