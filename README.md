@@ -1,4 +1,4 @@
-# 🏦 Centryx – AI-Powered Centralized Financial Management Platform**
+# 🏦 Centryx – AI-Powered Centralized Financial Management Platform
 
 ![WhatsApp Image 2025-11-02 at 12 25 42 PM](https://github.com/user-attachments/assets/4e5b5747-4163-4f76-9419-a3a3ebb7e253)
 
