@@ -332,7 +332,7 @@ export default function AuthPage() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", duration: 0.5 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 className="flex flex-col items-center gap-4"
               >
                 <motion.div
@@ -363,7 +363,7 @@ export default function AuthPage() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", duration: 0.5 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 className="flex flex-col items-center gap-4"
               >
                 <motion.div

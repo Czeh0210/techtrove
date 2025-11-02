@@ -12,6 +12,7 @@ export default function BankingChatbot() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
   const [userCards, setUserCards] = useState([]);
   const [currentCard, setCurrentCard] = useState(null);
   const [transferState, setTransferState] = useState({
@@ -127,7 +128,9 @@ export default function BankingChatbot() {
       console.log('✅ Session verification response:', data);
       if (data.valid && data.session?.userId) {
         console.log('✅ Setting userId to:', data.session.userId);
+        console.log('✅ Setting userEmail to:', data.session.email);
         setUserId(data.session.userId);
+        setUserEmail(data.session.email);
         await loadUserCards(data.session.userId);
       } else {
         console.log('❌ Session invalid or no userId:', data);
@@ -2060,23 +2063,46 @@ export default function BankingChatbot() {
       // Stop scanning
       setVerificationState(prev => ({ ...prev, scanning: false }));
       
-      const sessionId = localStorage.getItem('sessionId');
-      const res = await fetch('/api/auth/verify-face', {
+      console.log("Starting face verification...");
+      console.log("User email:", userEmail);
+      console.log("Embedding length:", embedding?.length);
+      
+      if (!userEmail) {
+        setVerificationState({
+          ...verificationState,
+          method: null,
+          scanning: false,
+          error: 'User email not found. Please log in again.'
+        });
+        return;
+      }
+      
+      // Use the same /api/auth/login endpoint as card page
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId,
-          embedding
+          email: userEmail,
+          embedding,
+          method: "face"
         })
       });
       
-      const data = await res.json();
+      console.log("Response status:", res.status);
+      console.log("Response ok:", res.ok);
       
-      if (res.ok && data.valid) {
+      const data = await res.json();
+      console.log("API response:", data);
+      
+      if (res.ok && data.ok) {
         // Face verification success
+        console.log("Face verified successfully!");
+        console.log("Similarity:", data.similarity);
+        console.log("Distance:", data.distance);
         await handleVerificationSuccess();
       } else {
         // Face verification failed
+        console.log("Face verification failed:", data);
         let errorMessage = data.error || 'Face verification failed.';
         if (data.similarity !== undefined && data.cosTh !== undefined) {
           errorMessage += `\n\nSimilarity: ${(data.similarity * 100).toFixed(1)}% (Required: ${(data.cosTh * 100).toFixed(0)}%)`;
