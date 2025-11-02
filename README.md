@@ -1,4 +1,8 @@
 # 🏦 Centryx – AI-Powered Centralized Financial Management Platform**
+
+![WhatsApp Image 2025-11-02 at 12 25 42 PM](https://github.com/user-attachments/assets/4e5b5747-4163-4f76-9419-a3a3ebb7e253)
+
+
 ## 🧩 Problem Statement
 In today’s digital era, individuals and small businesses often manage multiple bank accounts, e-wallets, and investment platforms without a unified view of their financial health.
 This fragmentation causes:
@@ -21,6 +25,9 @@ Therefore, there is a critical need for a centralized financial management platf
 **✅ A modern, user-friendly interface for smooth financial navigation**
 
 ### 🌟 Core Value Proposition
+
+![WhatsApp Image 2025-11-02 at 12 28 35 PM](https://github.com/user-attachments/assets/421b268a-1a38-4395-8a0d-7cd59af78ca4)
+
 
 “One dashboard for all your money — See, plan, and grow your finances with AI.”
 
